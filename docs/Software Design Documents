@@ -1,0 +1,346 @@
+Gfwrap Design Documents
+
+Software Requirements Specification
+
+1.	Core Algorithm: Huffman Coding
+Requirement ID	Description	Technical Details
+TR.1.1	Frequency Analysis	The compressor must perform a single pass read of the input image file to calculate the frequency of every 8-bit symbol (0-255). A fixed-size array/map of size 256 will be used for symbol counts.
+TR.1.2	Tree Construction	Implement a Min-Priority Queue (using a C++ std::priority_queue or a custom binary heap) to build the Huffman tree based on calculated frequencies.
+TR.1.3	Code Generation	A recursive tree traversal function (e.g., Depth-First Search) must generate the variable-length bit codes for every active symbol. Codes must be stored in a lookup table (e.g., std::map<uint8_t, std::vector<bool>> or a custom struct array).
+TR.1.4	Bit-Level I/O	Implement a low-level BitReader and BitWriter utility to handle reading and writing individual bits for the compressed data stream. This is critical for achieving maximum compression ratio.
+
+2.	Compressed File Format (.huff)
+Requirement ID	Description	Technical Details
+TR.2.1	Magic Number	The file must begin with a 4-byte magic number (e.g., 0x67667770 or "gfwp") to identify it as a gfwrap file and allow for basic error checking.
+TR.2.2	Original Size	Store the original, uncompressed file size (in bytes) as an 8-byte (64-bit) unsigned integer immediately following the magic number.
+TR.2.3	Huffman Tree Header	The serialized Huffman tree structure must be stored immediately before the compressed data. This header must be efficiently encoded (e.g., pre-order traversal sequence of leaf/node flags and symbol values) so the decompressor can rebuild the tree.
+TR.2.4	Compressed Data	The bulk of the file must be the tightly packed bitstream, ending exactly at the point corresponding to the original file size. Any residual bits in the final byte must be handled via the original size (TR.2.2).
+
+3.	Data Structures and Memory Management
+Requirement ID	Description	Technical Details
+TR.3.1	Modularity	Separate the application into distinct C++ classes/modules: HuffmanEncoder, HuffmanDecoder, BitStream, and CLIHandler.
+TR.3.2	Huffman Node	Implement a HuffmanNode structure/class using smart pointers (std::unique_ptr or std::shared_ptr) for robust, automatic memory management of the tree structure. Avoid raw malloc/free for tree nodes.
+TR.3.3	I/O Buffering	Implement internal buffers (e.g., 4KB or 8KB chunks) for both reading the input file and writing the compressed output to minimize system calls and improve I/O throughput.
+TR.3.4	Error Handling	All data structure access (e.g., queue pop, pointer dereferencing) must be guarded against null/empty checks. Implement exception handling for critical failures (e.g., file I/O errors, invalid compressed format).
+
+
+4.	Functional Requirements
+
+Requirement ID	Description	Technical Details
+TR.4.1	Compression	Input: Raw image file path. Output: .huff file. Function must implement steps TR.1.1 through TR.2.4.
+TR.4.2	Decompression	Input: .huff file path. Output: Original image file path. Function must read the header (TR.2.3) to rebuild the tree, use the BitReader (TR.1.4) to decode the stream, and write exactly TR.2.2 bytes.
+TR.4.3	CLI Interface (Draft)	The command line must support the following basic structure and flags: 
+
+
+gfwrap <operation> <input_file> [options]
+TR.4.4	Statistics Generation	A dedicated function must calculate and return the following metrics, triggered by a flag like -s or --stats: 
+
+
+1. Compression Ratio: (Original Size / Compressed Size) 
+
+
+2. Savings: (Original Size - Compressed Size) / Original Size * 100% 
+
+
+3. Time: Elapsed time for compression/decompression (using <chrono>).
+
+5.	Build and Environment
+Requirement ID	Description	Technical Details
+TR.5.1	Build System	Use CMake for build configuration. This ensures easy cross-platform compatibility (Linux/WSL). The project should define one target: gfwrap.
+TR.5.2	Compiler Flags	Compile with flags necessary for high quality code: -Wall -Wextra -pedantic (maximum warnings) and -O2 (optimization) for the release build.
+TR.5.3	Sanitization	Integrate Address Sanitizer (-fsanitize=address) and Undefined Behavior Sanitizer (-fsanitize=undefined) into a separate debug build target to rigorously enforce the memory discipline requirement.
+TR.5.4	Source Organization	Place class declarations in header files (.h or .hpp) and implementation in source files (.cpp). A Utils directory for I/O and statistics code is recommended.
+
+
+Software Architecure Diagram
+
+ 
+
+1. System-Wide Concurrency Model: Single-Threaded with Asynchronous I/O Potential
+Decision: For the initial version of gfwrap, a single-threaded, synchronous execution model is chosen. However, the design will anticipate and allow for future integration of asynchronous I/O without a major refactor.
+Justification:
+Simplicity & Debugging: For a command-line utility, introducing multi-threading from the outset adds significant complexity in terms of synchronization, race conditions, and debugging. Huffman coding itself is inherently sequential (frequency analysis then tree building then encoding).
+Performance Bottlenecks: For image compression, the primary bottlenecks are usually CPU-bound (Huffman tree construction, bit manipulation) and I/O-bound (reading/writing large files). A single-threaded design allows us to isolate these and optimize them effectively first.
+Anticipation for Asynchronous I/O (Future): The IOHandler and BitStream components will be designed with an interface that could later be adapted to use non-blocking I/O operations (e.g., io_uring on Linux, Boost.Asio) if profiling shows I/O to be a dominant bottleneck on very large files, or if a GUI wrapper is considered. This would allow the CPU to crunch data while the disk is spinning, but without the overhead of explicit user-managed threads.
+No Shared State Complexity: Since there's no complex, shared mutable state between distinct, concurrent operations (e.g., one thread compressing while another decompresses the same file), a multi-threaded CPU-bound approach isn't immediately necessary.
+
+2. Error Handling Model: Exception-Based for Critical, Sentinel-Based for Expected
+Decision: A hybrid approach using C++ exceptions for unrecoverable or unexpected errors and sentinel values/status codes for expected, recoverable conditions.
+Justification:
+Exceptions for Critical Failures (e.g., File I/O):
+File I/O Errors: If IOHandler cannot open a file, write to a full disk, or encounters corrupt file streams, these are unrecoverable failures for the current operation. Throwing exceptions (std::runtime_error, custom gfwrap_IOException) allows for immediate propagation up the call stack to gfwrap_App or CLIHandler for graceful termination and user notification.
+Invalid File Format: If HuffmanDecoder detects an invalid magic number or a corrupted Huffman tree header, this is also a critical error. An exception here prevents further processing of invalid data.
+Memory Allocation Failure (rare but critical): If new fails, std::bad_alloc will be thrown.
+Sentinel Values / Status Codes for Expected Conditions:
+CLI Argument Parsing: If the user provides invalid arguments (e.g., missing input file), the CLIHandler will return a status code or a boolean indicating failure, allowing gfwrap_App to print a usage message without crashing.
+Empty Queue/Stack: Internal data structures (like the priority queue in Huffman tree building) might check for emptiness before popping; this is a logical condition handled by return values or assertions, not exceptions.
+Benefits: This hybrid approach provides robust error detection without the performance overhead of exceptions for every minor fault. Exceptions ensure that critical, unhandled errors immediately terminate the affected operation cleanly, preventing silent data corruption or undefined behavior.
+
+3. Data Flow Model: Stream-Oriented, Pipelined Processing
+Decision: Data flow will be primarily stream-oriented and pipelined, minimizing large in-memory buffers where possible, especially for the core compression/decompression algorithms.
+Justification:
+Memory Efficiency: For potentially very large image files (Non-functional: "Efficient memory management"), processing data as a stream avoids loading the entire file into RAM, which is crucial for a "lightweight" utility.
+Compression:
+1.	Pass 1 (Frequency Analysis): IOHandler reads the input file in buffered chunks. HuffmanCompressor updates symbol frequencies. No full file in memory.
+2.	Pass 2 (Encoding): IOHandler reads the input file again (or seeks back to start if supported), HuffmanCompressor uses the BitStream to read byte-by-byte, encode bit-by-bit, and BitStream writes the compressed bits to IOHandler, which then writes to the output file in buffered chunks.
+Decompression: IOHandler reads the compressed file in buffered chunks. BitStream reads bits. HuffmanDecoder decodes bits into symbols. IOHandler writes decompressed symbols to the output file in buffered chunks.
+Clear Component Responsibilities:
+IOHandler: Solely responsible for interacting with the OS file system (opening, reading bytes, writing bytes).
+BitStream: Handles the byte-to-bit and bit-to-byte conversion, buffering, and management of the underlying byte stream provided by IOHandler. This decouples bit-level logic from raw file I/O.
+HuffmanCompressor/HuffmanDecoder: Focuses purely on the Huffman algorithm, interacting with BitStream for data input/output.
+Flexibility: This stream-oriented design makes it easier to adapt the utility to handle pipes (stdin/stdout) in the future, increasing its "Linux utility" feel, without a major internal re-architecture.
+
+Software Design Document
+Project: gfwrap - Lightweight Image Compression Utility
+Author: Gemini (Senior Software Architect)
+Date: November 2025
+1. Core Data Structures
+The Huffman algorithm requires two foundational structures: the tree node and the code lookup table.
+1.1. Huffman Tree Node (HuffmanNode)
+The tree node is designed for efficient construction using a Min-Priority Queue and for safe memory management using smart pointers.
+
+Huffman Coding .h files
+#include <memory>
+#include <cstdint>
+/**
+ * @brief Represents a node in the Huffman Tree.
+ */
+struct HuffmanNode {
+    // Data fields
+    const uint8_t symbol; // 8-bit symbol (0-255). Only relevant for leaf nodes.
+    size_t frequency;     // Count of this symbol/subtree's frequency.
+    bool is_leaf;         // Flag to quickly distinguish internal nodes from leaves.
+
+    // Child pointers using smart pointers for automatic memory management
+    std::unique_ptr<HuffmanNode> left;
+    std::unique_ptr<HuffmanNode> right;
+
+    // Constructor for leaf node
+    HuffmanNode(uint8_t sym, size_t freq) 
+        : symbol(sym), frequency(freq), is_leaf(true) {}
+    
+    // Constructor for internal node (combining two children)
+    HuffmanNode(size_t freq, std::unique_ptr<HuffmanNode> l, std::unique_ptr<HuffmanNode> r)
+        : symbol(0), frequency(freq), is_leaf(false), left(std::move(l)), right(std::move(r)) {}
+
+    // Default destructor (unique_ptr handles recursive destruction)
+    ~HuffmanNode() = default;
+};
+```
+
+**Justification:** We use `std::unique_ptr` for the children (`left`, `right`). This completely eliminates the need for manual `delete` calls and prevents memory leaks, adhering to the "Efficient memory management" NFR. The move semantics in the internal node constructor ensure efficient ownership transfer during tree construction.
+
+### 1.2. Huffman Code Lookup Table (`HuffmanCodes`)
+
+This table stores the variable-length bit sequence for each symbol, crucial for the encoding pass.
+
+Justification: A `std::vector<bool>` is used to represent the bit sequence for maximum clarity, although a more efficient bit-packed `std::string` or custom bit-array could be used for minor optimization in a later revision. The map provides $O(1)$ average time complexity for looking up a symbol's code during the second compression pass.
+using Code = std::vector<bool>;
+using HuffmanCodeMap = std::map<uint8_t, Code>;
+
+File format definition
+Offset (Bytes)	Size (Bytes)	Field Name	Description
+0	4	Magic Number	0x67667770 ("gfwp") - Identifies file type.
+4	8	Original Size	Uncompressed file size in bytes (uint64_t). Used to stop decompression exactly.
+12	N	Tree Header	Serialized Huffman Tree (see TR.2.3).
+12 + N	M	Compressed Data	The tightly packed bitstream of encoded symbols.
+3. Module APIs and Logic
+3.1. File I/O Handler (IOHandler)
+This module wraps raw file operations, providing buffered, robust byte-level I/O.
+#include <string>
+#include <fstream>
+#include <vector>
+#include <cstdint>
+
+class IOHandler {
+public:
+    // Constants for internal buffer size
+    static constexpr size_t BUFFER_SIZE = 4096;
+
+    /**
+     * @brief Opens a file stream for reading (or seeking/reading).
+     * @param path File path.
+     */
+    bool openRead(const std::string& path);
+
+    /**
+     * @brief Opens a file stream for writing.
+     * @param path File path.
+     */
+    bool openWrite(const std::string& path);
+
+    /**
+     * @brief Reads the next byte into the output reference.
+     * @return true if successful, false if EOF.
+     */
+    bool readByte(uint8_t& byte);
+
+    /**
+     * @brief Reads a block of data into a vector.
+     * @return Number of bytes actually read.
+     */
+    size_t readBlock(std::vector<uint8_t>& buffer, size_t count);
+
+    /**
+     * @brief Writes a single byte.
+     */
+    void writeByte(uint8_t byte);
+
+    /**
+     * @brief Writes a block of data.
+     */
+    void writeBlock(const std::vector<uint8_t>& buffer);
+
+    /**
+     * @brief Flushes and closes all open streams.
+     */
+    void close();
+
+    /**
+     * @brief Seeks to the beginning of the file (used for compression's second pass).
+     */
+    void seekToStart();
+
+    // Utility to get the size of an open file (used for TR.2.2 Original Size)
+    size_t getFileSize(const std::string& path);
+};
+Justification: The IOHandler completely abstracts the file stream complexity (std::fstream), separating it from the compression logic. The internal $4\text{KB}$ buffer minimizes system calls, improving I/O performance (TR.3.3).
+
+3.2. Bit Stream (BitStream)
+This module handles the crucial bit-level I/O, converting between the byte-stream provided by IOHandler and the individual bits required by the Huffman process.
+#include "io_handler.h"
+#include <vector>
+
+class BitStream {
+private:
+    IOHandler* io_ptr; // Pointer to the IOHandler instance
+    uint8_t current_byte; // The byte currently being read/written
+    int bit_index;        // Index of the next bit to process (0-7)
+
+public:
+    BitStream(IOHandler* handler) : io_ptr(handler), current_byte(0), bit_index(0) {}
+
+    // --- Write Operations ---
+
+    /**
+     * @brief Writes a single bit (0 or 1). Buffers until a full byte is ready.
+     * @param bit Boolean: true for 1, false for 0.
+     */
+    void writeBit(bool bit);
+
+    /**
+     * @brief Flushes the currently buffered byte to the IOHandler.
+     * Used at the end of the encoding process to write the final partial byte.
+     */
+    void flushWriteByte();
+
+    // --- Read Operations ---
+
+    /**
+     * @brief Reads the next single bit from the stream.
+     * Reads a new byte from IOHandler if the current byte is consumed.
+     * @return The read bit (true/false).
+     */
+    bool readBit();
+};
+
+3.3. Huffman Encoder (HuffmanEncoder)
+This module orchestrates the two passes required for Huffman encoding.
+#include "io_handler.h"
+#include "bit_stream.h"
+#include "huffman_node.h"
+
+class HuffmanEncoder {
+private:
+    std::map<uint8_t, size_t> frequencies;
+    HuffmanCodeMap codes;
+
+    void calculateFrequencies(IOHandler& io);
+    void buildTree(); // Populates root_node
+    void generateCodes(const HuffmanNode* node, Code current_code);
+    void serializeTree(IOHandler& io, const HuffmanNode* node); // Writes TR.2.3
+
+public:
+    std::unique_ptr<HuffmanNode> root_node; // Root of the constructed tree
+
+    /**
+     * @brief Performs the full compression process.
+     * @param input_path Path to the uncompressed file.
+     * @param output_path Path for the compressed .huff file.
+     * @return The size of the compressed file.
+     */
+    size_t compress(const std::string& input_path, const std::string& output_path);
+};
+3.4. Huffman Decoder (HuffmanDecoder)
+This module handles reading the header, rebuilding the tree, and decoding the bit stream.
+
+#include "io_handler.h"
+#include "bit_stream.h"
+#include "huffman_node.h"
+
+class HuffmanDecoder {
+private:
+    std::unique_ptr<HuffmanNode> root_node;
+    uint64_t original_size;
+
+    void deserializeTree(BitStream& bs); // Rebuilds root_node from TR.2.3
+    void writeHeader(IOHandler& io); // Writes TR.2.1 and TR.2.2
+
+public:
+    /**
+     * @brief Performs the full decompression process.
+     * @param input_path Path to the compressed .huff file.
+     * @param output_path Path for the restored raw file.
+     * @return The size of the decompressed file (should equal original_size).
+     */
+    size_t decompress(const std::string& input_path, const std::string& output_path);
+};
+3.5. Statistics Generator (StatsGenerator)
+This module collects and formats the non-functional reporting requirements.
+
+#include <cstdint>
+#include <chrono>
+#include <string>
+
+class StatsGenerator {
+private:
+    uint64_t original_size = 0;
+    uint64_t compressed_size = 0;
+    std::chrono::milliseconds elapsed_time;
+
+public:
+    /**
+     * @brief Records the original file size.
+     */
+    void setOriginalSize(uint64_t size) { original_size = size; }
+
+    /**
+     * @brief Records the compressed file size.
+     */
+    void setCompressedSize(uint64_t size) { compressed_size = size; }
+
+    /**
+     * @brief Records the elapsed time for the operation.
+     */
+    void setElapsedTime(std::chrono::milliseconds time) { elapsed_time = time; }
+
+    /**
+     * @brief Generates and returns the full report string.
+     * @return Formatted string containing all statistics.
+     */
+    std::string generateReport() const;
+};
+```
+
+**`StatsGenerator::generateReport()` Formatting:**
+
+The report must use C-style formatted output (`printf` or `std::format` in C++20) to ensure precise alignment of the columns for a clean CLI appearance. The formatting will ensure that the report is easily readable (e.g., using `%-25s` for right-padding labels).
+```markdown
+## Compression Statistics Report
+
+- Original Size:  [   10,240,000 bytes ]
+- Compressed Size:[    4,100,000 bytes ]
+- Compression Ratio: [ 2.50 : 1.00 ]
+- % Savings:       [ 59.96% ]
+- Time Elapsed:    [ 125 ms ]
+
