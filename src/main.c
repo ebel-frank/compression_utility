@@ -1,8 +1,7 @@
 /*
  * main.c
  *
- * Purpose: Implements a minimal REPL (Read-Eval-Print Loop) shell that can
- * execute external commands and basic built-in commands (exit, help).
+ * Purpose: Implements an efficient Image compression tool
  *
  * Stage 0 Learning Goals:
  * - Understanding the REPL pattern
@@ -24,10 +23,10 @@
  * - All allocated memory is freed before next iteration
  * - Proper error handling with perror()
  *
- * Author: Kizito Nkurikiyeyezu
+ * Author: Frank Ebeledike and George Ocran
  *
  * File history:
- *      Creation date: 2025-09-12
+ *      Creation date: 2025-11-20
  *      Version: 1.0
  *      Changes: Initial implementation
  *
@@ -35,54 +34,12 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "bitmap.h"
 #include "input.h"
-#include "execute.h"
-#include "builtins.h"
+#include "util.h"
 
 /*
- * shell_loop - Main REPL (Read-Eval-Print Loop)
- *
- * This function implements the core shell loop:
- *      1. Print prompt
- *      2. Read user input
- *      3. Parse input into tokens
- *      4. Execute the command
- *      5. Repeat until user exits
- *
- * The loop continues until execute_command returns 0 (exit command).
- */
-
-void shell_loop(void)
-{
-    char *line;
-    char **args;
-    int status;
-
-    do
-    {
-        printf("qiriro >>> ");
-        fflush(stdout); /* Ensure prompt is displayed immediately */
-
-        line = read_line();
-        if (line == NULL)
-        {
-            /* EOF received (Ctrl+D), exit gracefully */
-            printf("\n");
-            fprintf(stderr, "EOF received (Ctrl+D) - exiting shell gracefully\n");
-            exit(EXIT_SUCCESS);
-            // break;
-        }
-
-        args = split_line(line);
-        status = execute_command(args);
-
-        free(line);
-        free(args);
-    } while (status);
-}
-
-/*
- * main - Entry point for the shell
+ * main - Entry point for the compression tool
  *
  * Args:
  *   argc: Argument count (kept for future use -- unused in Stage 0)
@@ -90,13 +47,53 @@ void shell_loop(void)
  *
  * Returns:
  *   EXIT_SUCCESS on normal termination
+ *   EXIT_FAILURE in case of a failure
  */
 int main(int argc, char **argv)
 {
-    /* Unused parameters - suppress compiler warnings */
-    (void)argc;
-    (void)argv;
+    bool *processed = calloc(argc, sizeof(bool));
+    processed[0] = true; // Mark program name as processed
 
-    shell_loop();
+    bool helpFlag = false;
+    bool versionFlag = false;
+    bool hasError = false;
+    bool verboseFlag = false;
+    bool wrap = false;
+    char *inputFile = NULL;
+    char *outputFile = NULL;
+
+    parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
+               &hasError, &wrap, &inputFile, &outputFile);
+
+    // Handle flags
+    if (hasError)
+    {
+        fprintf(stderr, "\n");
+        printHelp();
+        free(processed);
+        return EXIT_FAILURE;
+    }
+    if (helpFlag)
+    {
+        printHelp();
+        free(processed);
+        return EXIT_SUCCESS;
+    }
+    if (versionFlag)
+    {
+        printVersion();
+        free(processed);
+        return EXIT_SUCCESS;
+    }
+
+    // if (argc != 2) {
+    //     printf("Usage: %s <image_file>\n", argv[0]);
+    //     return EXIT_FAILURE;
+    // }
+    // printf("Value of argc: %d\n", argc);
+    // printf("Value of argv[0]: %s\n", argv[0]);
+    // printf("Value of argv[1]: %s\n", argv[1]);
+    // readImageFile(argv[1]);
+    printf("Input: %s", inputFile);
     return EXIT_SUCCESS;
 }
