@@ -5,6 +5,10 @@
 
 void printHelp();
 
+void printWrapHelp();
+
+void printUnwrapHelp();
+
 void printVersion();
 
 #endif

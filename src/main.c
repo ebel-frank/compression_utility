@@ -34,9 +34,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include "bitmap.h"
-#include "input.h"
-#include "util.h"
+#include "../include/bitmap.h"
+#include "../include/input.h"
+#include "../include/util.h"
 
 /*
  * main - Entry point for the compression tool
