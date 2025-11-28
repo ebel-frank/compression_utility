@@ -1,7 +1,7 @@
 #include "../include/input.h"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *hasError, bool *wrap, char **inputFile, char **outputFile)
+                bool *verboseFlag, bool *hasError, bool *wrap, char **file)
 {
     for (int i = 0; i < argc; i++)
     {
@@ -28,14 +28,15 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         else if (strcmp(argv[i], "wrap") == 0)
         {
             *wrap = true;
-            *inputFile = argv[argc - 1];
-            processed[argc - 1] = true;
+            processed[i] = true;
         }
         else if (strcmp(argv[i], "unwrap") == 0)
         {
             *wrap = false;
-            *inputFile = argv[argc - 1];
-            processed[argc - 1] = true;
+            processed[i] = true;
+        } else if (argv[i][0] != '-') {
+            *file = argv[i];
+            processed[i] = true;
         }
         // else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0)
         // {

@@ -59,31 +59,32 @@ int main(int argc, char **argv)
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
-    char *inputFile = NULL;
-    char *outputFile = NULL;
+    char *file = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &hasError, &wrap, &inputFile, &outputFile);
+               &hasError, &wrap, &file);
 
+    free(processed);
     // Handle flags
     if (hasError)
     {
         fprintf(stderr, "\n");
         printHelp();
-        free(processed);
         return EXIT_FAILURE;
     }
     if (helpFlag)
     {
         printHelp();
-        free(processed);
         return EXIT_SUCCESS;
     }
     if (versionFlag)
     {
         printVersion();
-        free(processed);
         return EXIT_SUCCESS;
+    }
+    if (!file) {
+        printHelp();
+        return EXIT_FAILURE;
     }
 
     // if (argc != 2) {
@@ -94,6 +95,6 @@ int main(int argc, char **argv)
     // printf("Value of argv[0]: %s\n", argv[0]);
     // printf("Value of argv[1]: %s\n", argv[1]);
     // readImageFile(argv[1]);
-    printf("Input: %s", inputFile);
+    printf("Input: %s", file);
     return EXIT_SUCCESS;
 }
