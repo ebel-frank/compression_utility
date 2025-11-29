@@ -2,6 +2,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include "../include/huffman.h"
 
 // Function to calculate word length
 int codelen(char *code)
@@ -38,29 +39,36 @@ int fib(int n)
     return fib(n - 1) + fib(n - 2);
 }
 
-int main()
+void generateHuffman(char *fileName)
 {
     int i, j;
-    int data = 0, offset, bpp = 0, width, height;
-    int **image;
-    int temp;
+    // int data = 0;
+    // int offset;
+    // int bpp = 0;
+    int width, height;
+    // int **image;
+    // int temp;
 
     // test input for height and width
-    height = 2;
-    width = 2;
+    // height = 2;
+    // width = 2;
 
+    BMPResult bmpRes = readImageFile(fileName);
+    uint8_t **image = bmpRes.imageData;
+    width = bmpRes.header->width;
+    height = bmpRes.header->height;
     // creating dummy image values
-    image = (int **)malloc(height * sizeof(int *));
-    for (i = 0; i < height; i++)
-    {
-        image[i] = (int *)malloc(width * sizeof(int));
-    }
+    // image = (int **)malloc(bmpRes.header->height * sizeof(int *));
+    // for (i = 0; i < height; i++)
+    // {
+    //     image[i] = (int *)malloc(ih->width * sizeof(int));
+    // }
 
-    // sample image
-    image[0][0] = 12;
-    image[0][1] = 5;
-    image[1][0] = 16;
-    image[0][0] = 20;
+    // // sample image
+    // image[0][0] = 12;
+    // image[0][1] = 5;
+    // image[1][0] = 16;
+    // image[0][0] = 20;
 
     // Creating the Histogram
     int hist[256];
@@ -210,7 +218,7 @@ int main()
     // Assigning Code through backtracking
     char left = '0';
     char right = '1';
-    int index;
+    // int index;
     for (i = totalnodes - 1; i >= nodes; i--)
     {
         if (pix_freq[i].left != NULL)
@@ -248,5 +256,5 @@ int main()
         avgbitnum += pix_freq[i].freq * codelen(pix_freq[i].code);
     printf("Average number of bits:: %f\n", avgbitnum);
 
-    return 0;
+    // return 0;
 }

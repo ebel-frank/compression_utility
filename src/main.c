@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../include/bitmap.h"
+#include "../include/huffman.h"
 #include "../include/input.h"
 #include "../include/util.h"
 
@@ -94,6 +95,10 @@ int main(int argc, char **argv)
     // printf("Value of argv[0]: %s\n", argv[0]);
     // printf("Value of argv[1]: %s\n", argv[1]);
     // readImageFile(argv[1]);
-    printf("Input: %s", inputFile);
+    // printf("Input: %s\n", inputFile);
+    // BMPResult res = readImageFile(inputFile);
+    generateHuffman(inputFile);
+
+    // printf("%d\n", res.header->height);
     return EXIT_SUCCESS;
 }

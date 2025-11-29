@@ -3,6 +3,8 @@
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
                 bool *verboseFlag, bool *hasError, bool *wrap, char **inputFile, char **outputFile)
 {
+    char *test = "test";
+    outputFile[0] = test;
     for (int i = 0; i < argc; i++)
     {
         if (processed[i])
@@ -29,6 +31,8 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         {
             *wrap = true;
             *inputFile = argv[argc - 1];
+            printf("file name: %s \n", inputFile[0]);
+            processed[argc - 2] = true;
             processed[argc - 1] = true;
         }
         else if (strcmp(argv[i], "unwrap") == 0)
