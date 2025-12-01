@@ -1,7 +1,7 @@
 #include "../include/input.h"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *hasError, bool *wrap, char **file)
+                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file)
 {
     for (int i = 0; i < argc; i++)
     {
@@ -15,7 +15,7 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
             *helpFlag = true;
             processed[i] = true;
         }
-        else if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0)
+        else if (!commandFlag && (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0))
         {
             *versionFlag = true;
             processed[i] = true;
@@ -28,29 +28,18 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         else if (strcmp(argv[i], "wrap") == 0)
         {
             *wrap = true;
+            *commandFlag = true;
             processed[i] = true;
         }
         else if (strcmp(argv[i], "unwrap") == 0)
         {
             *wrap = false;
+            *commandFlag = true;
             processed[i] = true;
         } else if (argv[i][0] != '-') {
             *file = argv[i];
             processed[i] = true;
         }
-        // else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0)
-        // {
-        //     if (i + 1 < argc) {
-        //         outputFile = argv[i + 1];
-        //         processed[i] = true;
-        //         processed[i + 1] = true;
-        //         i++; // Skip next argument
-        //     } else {
-        //         fprintf(stderr, "Error: -o requires a file argument\n");
-        //         *hasError = true;
-        //         processed[i] = true;
-        //     }
-        // }
     }
 
     // Check for unprocessed arguments (unsupported options)

@@ -56,13 +56,14 @@ int main(int argc, char **argv)
 
     bool helpFlag = false;
     bool versionFlag = false;
+    bool commandFlag = false;
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
     char *file = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &hasError, &wrap, &file);
+               &commandFlag, &hasError, &wrap, &file);
 
     free(processed);
     // Handle flags
@@ -72,18 +73,35 @@ int main(int argc, char **argv)
         printHelp();
         return EXIT_FAILURE;
     }
-    if (helpFlag)
+    if (!commandFlag && helpFlag)
     {
         printHelp();
         return EXIT_SUCCESS;
     }
-    if (versionFlag)
+    if (!commandFlag && verboseFlag)
     {
         printVersion();
         return EXIT_SUCCESS;
     }
-    if (!file) {
-        printHelp();
+    if (commandFlag && helpFlag) {
+        if (wrap) {
+            printWrapHelp();
+        } else {
+            printUnwrapHelp();
+        }
+         return EXIT_SUCCESS;
+    }
+    if (!file)
+    {
+
+        if (wrap)
+        {
+            printWrapHelp();
+        }
+        else
+        {
+            printUnwrapHelp();
+        }
         return EXIT_FAILURE;
     }
 
