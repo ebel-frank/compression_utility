@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../include/bitmap.h"
+#include "../include/huffman.h"
 #include "../include/input.h"
 #include "../include/util.h"
 
@@ -104,6 +105,14 @@ int main(int argc, char **argv)
         }
         return EXIT_FAILURE;
     }
+      
+    if (wrap) {
+      generateHuffman(inputFile);
+      return EXIT_SUCCESS;
+    } else {
+      decompress(inputFile);
+      return EXIT_SUCCESS;
+    }
 
     // if (argc != 2) {
     //     printf("Usage: %s <image_file>\n", argv[0]);
@@ -113,6 +122,5 @@ int main(int argc, char **argv)
     // printf("Value of argv[0]: %s\n", argv[0]);
     // printf("Value of argv[1]: %s\n", argv[1]);
     // readImageFile(argv[1]);
-    printf("Input: %s", file);
     return EXIT_SUCCESS;
 }

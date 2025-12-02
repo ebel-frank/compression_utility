@@ -1,7 +1,7 @@
 #include "../include/input.h"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file)
+                bool *verboseFlag, bool *hasError, bool *wrap, char **inputFile, char **outputFile, bool *decomp)
 {
     for (int i = 0; i < argc; i++)
     {
@@ -33,6 +33,7 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         }
         else if (strcmp(argv[i], "unwrap") == 0)
         {
+          printf("about to unwrap\n");
             *wrap = false;
             *commandFlag = true;
             processed[i] = true;
@@ -42,7 +43,7 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         }
     }
 
-    // Check for unprocessed arguments (unsupported options)
+   // Check for unprocessed arguments (unsupported options)
     for (int i = 1; i < argc; i++)
     {
         if (!processed[i])
