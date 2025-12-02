@@ -35,7 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "../include/bitmap.h"
-#include "../include/input.h"
+#include "../include/parser.h"
 #include "../include/util.h"
 
 /*
@@ -65,6 +65,9 @@ int main(int argc, char **argv)
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
                &commandFlag, &hasError, &wrap, &file);
 
+
+    printf("Help: %d, error: %d, version: %d, verbase: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
+    // printf("Check: %d", )
     free(processed);
     // Handle flags
     if (hasError)
@@ -78,7 +81,7 @@ int main(int argc, char **argv)
         printHelp();
         return EXIT_SUCCESS;
     }
-    if (!commandFlag && verboseFlag)
+    if (!commandFlag && versionFlag)
     {
         printVersion();
         return EXIT_SUCCESS;
@@ -104,6 +107,7 @@ int main(int argc, char **argv)
         }
         return EXIT_FAILURE;
     }
+    execute(wrap, file);
 
     // if (argc != 2) {
     //     printf("Usage: %s <image_file>\n", argv[0]);
@@ -113,6 +117,5 @@ int main(int argc, char **argv)
     // printf("Value of argv[0]: %s\n", argv[0]);
     // printf("Value of argv[1]: %s\n", argv[1]);
     // readImageFile(argv[1]);
-    printf("Input: %s", file);
     return EXIT_SUCCESS;
 }

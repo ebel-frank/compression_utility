@@ -1,9 +1,6 @@
-
-
 #include <stdio.h>
 #include <stdlib.h>
 #include "../include/huffman.h"
-#include "../include/bitmap.h"
 
 // Function to calculate word length
 int codelen(char *code)
@@ -40,222 +37,337 @@ int fib(int n)
     return fib(n - 1) + fib(n - 2);
 }
 
-void generateHuffman(char *fileName)
+void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
 {
-    int i, j;
-    // int data = 0;
-    // int offset;
-    // int bpp = 0;
-    int width, height;
-    // int **image;
-    // int temp;
-
-    // test input for height and width
-    // height = 2;
-    // width = 2;
-
-    BMPResult bmpRes = readImageFile(fileName);
-    uint8_t **image = bmpRes.imageData;
-    width = bmpRes.header->width;
-    height = bmpRes.header->height;
-    // creating dummy image values
-    // image = (int **)malloc(bmpRes.header->height * sizeof(int *));
-    // for (i = 0; i < height; i++)
-    // {
-    //     image[i] = (int *)malloc(ih->width * sizeof(int));
-    // }
-
-    // // sample image
-    // image[0][0] = 12;
-    // image[0][1] = 5;
-    // image[1][0] = 16;
-    // image[0][0] = 20;
-
-    // Creating the Histogram
-    int hist[256];
-
-    for (i = 0; i < 256; i++)
-        hist[i] = 0;
-
-    for (i = 0; i < height; i++)
-        for (j = 0; j < width; j++)
-            hist[image[i][j]] += 1;
-
-    // Finding number of
-    // non-zero occurrences
-    int nodes = 0;
-    for (i = 0; i < 256; i++)
+    FILE *image_file = fopen(fileName, "rb");
+    if (!image_file)
     {
-        if (hist[i] != 0)
-            nodes += 1;
+        printf("Error Opening Image File!\n");
+        return;
     }
 
-    // Calculating minimum probability
-    float p = 1.0, ptemp;
-    for (i = 0; i < 256; i++)
+    int width, height, offset, bpp;
+
+    // Read BMP Metadata
+    fseek(image_file, 10, SEEK_SET);
+    fread(&offset, 4, 1, image_file);
+    fseek(image_file, 18, SEEK_SET);
+    fread(&width, 4, 1, image_file);
+    fread(&height, 4, 1, image_file);
+    fseek(image_file, 28, SEEK_SET);
+    fread(&bpp, 2, 1, image_file);
+
+    // Calculate Padding (BMP rows must be multiple of 4 bytes)
+    int padding = (4 - (width * 3) % 4) % 4;
+
+    // Allocate memory for the ENTIRE image (3 bytes per pixel)
+    // We treat the image as a long 1D array of bytes for easier processing
+    long total_bytes = width * height * 3;
+    unsigned char *img_data = (unsigned char *)malloc(total_bytes);
+
+    // Read Image Data
+    fseek(image_file, offset, SEEK_SET);
+
+    // We assume the input BMP is stored Bottom-Up (Standard).
+    // We read it row by row to handle padding.
+    long count = 0;
+    // unsigned char pad[3];
+
+    // Read row by row
+    // Note: We store it exactly as it comes (Bottom-Up)
+    for (int i = 0; i < height; i++)
     {
-        ptemp = (hist[i] / (float)(height * width));
+        fread(&img_data[count], 1, width * 3, image_file);
+        count += width * 3;
+        fseek(image_file, padding, SEEK_CUR); // Skip padding in input
+    }
+    fclose(image_file);
+
+    // --- GENERATE HISTOGRAM (Color Aware) ---
+    int hist[256];
+    for (int i = 0; i < 256; i++)
+        hist[i] = 0;
+
+    // Count every single byte (R, G, and B separately)
+    for (long i = 0; i < total_bytes; i++)
+    {
+        hist[img_data[i]] += 1;
+    }
+
+    int nodes = 0;
+    for (int i = 0; i < 256; i++)
+        if (hist[i] != 0)
+            nodes++;
+
+    // --- STANDARD HUFFMAN TREE BUILDING (Same as before) ---
+    // (This logic remains identical, it just processes more data now)
+
+    // ... [Calculations for maxcodelen] ...
+    float p = 1.0, ptemp;
+    for (int i = 0; i < 256; i++)
+    {
+        ptemp = (hist[i] / (float)total_bytes);
         if (ptemp > 0 && ptemp <= p)
             p = ptemp;
     }
-
-    // Calculating max length of code word
-    i = 0;
+    int i = 0;
     while ((1 / p) > fib(i))
         i++;
     int maxcodelen = i - 3;
+    if (maxcodelen < 50)
+        maxcodelen = 50;
 
-    // Defining Structures pixfreq
-    struct pixfreq
-    {
-        int pix, larrloc, rarrloc;
-        float freq;
-        struct pixfreq *left, *right;
-        char code[maxcodelen];
-    };
+    struct pixfreq *pix_freq = (struct pixfreq *)malloc(sizeof(struct pixfreq) * (2 * nodes - 1));
+    struct huffcode *huffcodes = (struct huffcode *)malloc(sizeof(struct huffcode) * nodes);
 
-    // Defining Structures huffcode
-    struct huffcode
-    {
-        int pix, arrloc;
-        float freq;
-    };
-
-    // Declaring structs
-    struct pixfreq *pix_freq;
-    struct huffcode *huffcodes;
-    int totalnodes = 2 * nodes - 1;
-    pix_freq = (struct pixfreq *)malloc(sizeof(struct pixfreq) * totalnodes);
-    huffcodes = (struct huffcode *)malloc(sizeof(struct huffcode) * nodes);
-
-    // Initializing
-    j = 0;
-    int totpix = height * width;
-    float tempprob;
-    for (i = 0; i < 256; i++)
+    int j = 0;
+    for (int i = 0; i < 256; i++)
     {
         if (hist[i] != 0)
         {
-            // pixel intensity value
             huffcodes[j].pix = i;
-            pix_freq[j].pix = i;
-
-            // location of the node in the pix_freq array
             huffcodes[j].arrloc = j;
-
-            // probability of occurrence
-            tempprob = (float)hist[i] / (float)totpix;
-            pix_freq[j].freq = tempprob;
-            huffcodes[j].freq = tempprob;
-
-            // Declaring the child of leaf node as NULL pointer
+            huffcodes[j].freq = (float)hist[i] / (float)total_bytes;
+            pix_freq[j].pix = i;
+            pix_freq[j].freq = huffcodes[j].freq;
             pix_freq[j].left = NULL;
             pix_freq[j].right = NULL;
-
-            // initializing the code word as end of line
+            pix_freq[j].code = (char *)malloc(maxcodelen);
             pix_freq[j].code[0] = '\0';
             j++;
         }
     }
 
-    // Sorting the histogram
+    // Sort
     struct huffcode temphuff;
-
-    // Sorting w.r.t probability of occurrence
-    for (i = 0; i < nodes; i++)
+    for (int i = 0; i < nodes; i++)
     {
-        for (j = i + 1; j < nodes; j++)
+        for (int k = i + 1; k < nodes; k++)
         {
-            if (huffcodes[i].freq < huffcodes[j].freq)
+            if (huffcodes[i].freq < huffcodes[k].freq)
             {
                 temphuff = huffcodes[i];
-                huffcodes[i] = huffcodes[j];
-                huffcodes[j] = temphuff;
+                huffcodes[i] = huffcodes[k];
+                huffcodes[k] = temphuff;
             }
         }
     }
 
-    // Building Huffman Tree
+    // Build Tree
     float sumprob;
     int sumpix;
-    int n = 0, k = 0;
-    int nextnode = nodes;
-
-    // Since total number of nodes in Huffman Tree is 2*nodes-1
+    int n = 0, k = 0, nextnode = nodes;
     while (n < nodes - 1)
     {
-        // Adding the lowest two probabilities
         sumprob = huffcodes[nodes - n - 1].freq + huffcodes[nodes - n - 2].freq;
         sumpix = huffcodes[nodes - n - 1].pix + huffcodes[nodes - n - 2].pix;
-
-        // Appending to the pix_freq Array
         pix_freq[nextnode].pix = sumpix;
         pix_freq[nextnode].freq = sumprob;
         pix_freq[nextnode].left = &pix_freq[huffcodes[nodes - n - 2].arrloc];
         pix_freq[nextnode].right = &pix_freq[huffcodes[nodes - n - 1].arrloc];
+        pix_freq[nextnode].code = (char *)malloc(maxcodelen);
         pix_freq[nextnode].code[0] = '\0';
-        i = 0;
-
-        // Sorting and Updating the huffcodes array simultaneously
-        while (sumprob <= huffcodes[i].freq)
-            i++;
-
-        // inserting the new node in the huffcodes array
+        int x = 0;
+        while (sumprob <= huffcodes[x].freq && x < nodes - n - 2)
+            x++;
         for (k = nodes - 1; k >= 0; k--)
         {
-            if (k == i)
+            if (k == x)
             {
                 huffcodes[k].pix = sumpix;
                 huffcodes[k].freq = sumprob;
                 huffcodes[k].arrloc = nextnode;
             }
-            else if (k > i)
+            else if (k > x)
                 huffcodes[k] = huffcodes[k - 1];
         }
-        n += 1;
-        nextnode += 1;
+        n++;
+        nextnode++;
     }
 
-    // Assigning Code through backtracking
-    char left = '0';
-    char right = '1';
-    // int index;
-    for (i = totalnodes - 1; i >= nodes; i--)
+    // Generate Codes
+    for (int i = 2 * nodes - 2; i >= nodes; i--)
     {
-        if (pix_freq[i].left != NULL)
-            strconcat(pix_freq[i].left->code, pix_freq[i].code, left);
-        if (pix_freq[i].right != NULL)
-            strconcat(pix_freq[i].right->code, pix_freq[i].code, right);
+        if (pix_freq[i].left)
+            strconcat(pix_freq[i].left->code, pix_freq[i].code, '0');
+        if (pix_freq[i].right)
+            strconcat(pix_freq[i].right->code, pix_freq[i].code, '1');
     }
 
-    // Encode the Image
-    int pix_val;
-    int l;
+    // Lookup Table for Speed
+    char *codeTable[256] = {0};
+    for (int i = 0; i < nodes; i++)
+        codeTable[pix_freq[i].pix] = pix_freq[i].code;
 
-    // Writing the Huffman encoded Image into a text file
-    FILE *imagehuff = fopen("encoded_image.txt", "wb");
-    for (i = 0; i < height; i++)
-        for (j = 0; j < width; j++)
+    // --- SAVE TO FILE ---
+    FILE *outfile = fopen("encoded_image.txt", "w");
+    fprintf(outfile, "%d %d\n%d\n", width, height, nodes); // Header
+    for (int i = 0; i < 256; i++)
+    {
+        if (hist[i] != 0)
+            fprintf(outfile, "%d %d\n", i, hist[i]);
+    }
+    fprintf(outfile, "\n--DATA--\n");
+
+    // Write Encoded Data (Color!)
+    for (long i = 0; i < total_bytes; i++)
+    {
+        fprintf(outfile, "%s", codeTable[img_data[i]]);
+    }
+
+    fclose(outfile);
+    free(img_data);
+    printf("Color Image Encoded Successfully.\n");
+}
+
+void decompress(char *fileName, char *outputfile, int pipe_write_fd)
+{
+    FILE *encoded_file = fopen(fileName, "r");
+    if (!encoded_file)
+    {
+        printf("File not found!\n");
+        return;
+    }
+
+    int width, height, nodes;
+    fscanf(encoded_file, "%d %d", &width, &height);
+    fscanf(encoded_file, "%d", &nodes);
+
+    // --- REBUILD TREE (Standard) ---
+    // (Variable declarations and tree building logic same as before)
+    struct huffcode *huffcodes = (struct huffcode *)malloc(sizeof(struct huffcode) * nodes);
+    struct pixfreq *pix_freq = (struct pixfreq *)malloc(sizeof(struct pixfreq) * (2 * nodes - 1));
+    long total_bytes = width * height * 3; // Note: Multiplied by 3 for RGB
+    int pix_val, freq_val;
+
+    for (int i = 0; i < nodes; i++)
+    {
+        fscanf(encoded_file, "%d %d", &pix_val, &freq_val);
+        huffcodes[i].pix = pix_val;
+        huffcodes[i].freq = (float)freq_val / total_bytes;
+        huffcodes[i].arrloc = i;
+        pix_freq[i].pix = pix_val;
+        pix_freq[i].freq = huffcodes[i].freq;
+        pix_freq[i].left = NULL;
+        pix_freq[i].right = NULL;
+    }
+
+    // Sort
+    struct huffcode temphuff;
+    for (int i = 0; i < nodes; i++)
+    {
+        for (int k = i + 1; k < nodes; k++)
         {
-            pix_val = image[i][j];
-            for (l = 0; l < nodes; l++)
-                if (pix_val == pix_freq[l].pix)
-                    fprintf(imagehuff, "%s", pix_freq[l].code);
+            if (huffcodes[i].freq < huffcodes[k].freq)
+            {
+                temphuff = huffcodes[i];
+                huffcodes[i] = huffcodes[k];
+                huffcodes[k] = temphuff;
+            }
         }
-
-    // Printing Huffman Codes
-    printf("Huffman Codes::\n\n");
-    printf("pixel values ->   Code\n\n");
-    for (i = 0; i < nodes; i++)
+    }
+    // Build
+    float sumprob;
+    int sumpix;
+    int n = 0, k = 0, nextnode = nodes;
+    while (n < nodes - 1)
     {
-        printf("    %d      -> %s\n", pix_freq[i].pix, pix_freq[i].code);
+        sumprob = huffcodes[nodes - n - 1].freq + huffcodes[nodes - n - 2].freq;
+        sumpix = huffcodes[nodes - n - 1].pix + huffcodes[nodes - n - 2].pix;
+        pix_freq[nextnode].pix = sumpix;
+        pix_freq[nextnode].freq = sumprob;
+        pix_freq[nextnode].left = &pix_freq[huffcodes[nodes - n - 2].arrloc];
+        pix_freq[nextnode].right = &pix_freq[huffcodes[nodes - n - 1].arrloc];
+        int x = 0;
+        while (sumprob <= huffcodes[x].freq && x < nodes - n - 2)
+            x++;
+        for (k = nodes - 1; k >= 0; k--)
+        {
+            if (k == x)
+            {
+                huffcodes[k].pix = sumpix;
+                huffcodes[k].freq = sumprob;
+                huffcodes[k].arrloc = nextnode;
+            }
+            else if (k > x)
+                huffcodes[k] = huffcodes[k - 1];
+        }
+        n++;
+        nextnode++;
+    }
+    struct pixfreq *root = &pix_freq[nextnode - 1];
+
+    // --- DECODE STREAM ---
+    char buffer[100];
+    fgets(buffer, 100, encoded_file);
+    while (fgets(buffer, 100, encoded_file))
+    {
+        if (buffer[0] == '-')
+            break;
     }
 
-    // Calculating Average Bit Length
-    float avgbitnum = 0;
-    for (i = 0; i < nodes; i++)
-        avgbitnum += pix_freq[i].freq * codelen(pix_freq[i].code);
-    printf("Average number of bits:: %f\n", avgbitnum);
+    // Allocate memory for the decoded RGB data
+    unsigned char *img_data = (unsigned char *)malloc(total_bytes);
+    long idx = 0;
 
-    // return 0;
+    struct pixfreq *current = root;
+    char bit;
+
+    // Read bits and traverse tree
+    while (idx < total_bytes)
+    {
+        bit = fgetc(encoded_file);
+        if (bit == EOF)
+            break;
+        if (bit == '\n' || bit == '\r')
+            continue;
+
+        if (bit == '0')
+            current = current->left;
+        else if (bit == '1')
+            current = current->right;
+
+        if (!current->left && !current->right)
+        {
+            img_data[idx++] = (unsigned char)current->pix;
+            current = root;
+        }
+    }
+    fclose(encoded_file);
+
+    // --- WRITE BMP FILE (Orientation Fix) ---
+    FILE *out_file = fopen("restored_image.bmp", "wb");
+
+    int padding = (4 - (width * 3) % 4) % 4;
+    int filesize = 54 + (3 * width + padding) * height;
+
+    unsigned char header[54] = {
+        'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+    *(int *)&header[2] = filesize;
+    *(int *)&header[18] = width;
+    *(int *)&header[22] = height; // POSITIVE height = Bottom-Up storage
+
+    fwrite(header, 1, 54, out_file);
+
+    unsigned char padBytes[3] = {0};
+
+    // Note: The encoder read the file Bottom-Up (standard BMP).
+    // So 'img_data' contains the bottom row at index 0.
+    // Therefore, we just write it out linearly to maintain the Bottom-Up format.
+
+    long row_size = width * 3;
+    for (int i = 0; i < height; i++)
+    {
+        // Write the row
+        fwrite(&img_data[i * row_size], 1, row_size, out_file);
+        // Write padding
+        fwrite(padBytes, 1, padding, out_file);
+    }
+
+    fclose(out_file);
+    free(img_data);
+    printf("Decompression Complete. Orientation corrected.\n");
 }
