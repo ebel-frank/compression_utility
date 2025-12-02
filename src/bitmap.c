@@ -103,26 +103,36 @@ BMPResult readImageFile(const char *filename)
     // Seek to pixel data
     fseek(file, fileHeader.dataOffset, SEEK_SET);
 
+    uint8_t temp = 0;
+
     // Read and print first 5 rows of pixel data
     printf("First 5 rows of pixel data (in hex):\n");
-    for (int i = 0; i < 5 && i < infoHeader->height; i++)
+    for (int i = 0; i < infoHeader->height; i++)
     {
-        // if (fread(rowData, 1, rowSize, file) != rowSize)
-        if (fread(rowData, 1, rowSize, file) != (size_t)rowSize)
-        {
-            printf("Error: Could not read pixel data\n");
-            break;
-        }
-        printf("Row %d: \n", i);
+        // // if (fread(rowData, 1, rowSize, file) != rowSize)
+        // if (fread(rowData, 1, rowSize, file) != (size_t)rowSize)
+        // {
+        //     printf("Error: Could not read pixel data\n");
+        //     break;
+        // }
+        // printf("Row %d: \n", i);
+        // printf("Row data: %hhn\n", rowData);
 
-        printf("reading...\n");
-        for (int j = 0; j < rowSize; j++)
+        // printf("reading...\n");
+        for (int j = 0; j < infoHeader->width; j++)
         {
             // printf("printing out..\n");
-            printf("%02X \n", rowData[j]);
+            // printf("%02X \n", rowData[j]);
             //  temp = temp & 0x0000FF;
             //  image[i][j] = temp;
-            image[i][j] = rowData[j];
+            // image[i][j] = rowData[j];
+
+            fread(&temp, 3, 1, file);
+
+            // the Image is a
+            // 24-bit BMP Image
+            temp = temp & 0x0000FF;
+            image[i][j] = temp;
         }
         printf("\n");
     }

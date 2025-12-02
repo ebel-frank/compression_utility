@@ -1,7 +1,7 @@
 #include "../include/input.h"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *hasError, bool *wrap, char **inputFile, char **outputFile)
+                bool *verboseFlag, bool *hasError, bool *wrap, char **inputFile, char **outputFile, bool *decomp)
 {
     char *test = "test";
     outputFile[0] = test;
@@ -35,10 +35,13 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
             processed[argc - 2] = true;
             processed[argc - 1] = true;
         }
-        else if (strcmp(argv[i], "unwrap") == 0)
+        else if (strcmp(argv[i], "decompress") == 0)
         {
-            *wrap = false;
+            printf("about to unwrap\n");
+
+            *decomp = true;
             *inputFile = argv[argc - 1];
+            processed[argc - 2] = true;
             processed[argc - 1] = true;
         }
         // else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0)

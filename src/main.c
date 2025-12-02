@@ -60,11 +60,12 @@ int main(int argc, char **argv)
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
+    bool decomp = false;
     char *inputFile = NULL;
     char *outputFile = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &hasError, &wrap, &inputFile, &outputFile);
+               &hasError, &wrap, &inputFile, &outputFile, &decomp);
 
     // Handle flags
     if (hasError)
@@ -86,6 +87,18 @@ int main(int argc, char **argv)
         free(processed);
         return EXIT_SUCCESS;
     }
+    if (wrap)
+    {
+        generateHuffman(inputFile);
+        free(processed);
+        return EXIT_SUCCESS;
+    }
+    if (decomp)
+    {
+        decompress(inputFile);
+        free(processed);
+        return EXIT_SUCCESS;
+    }
 
     // if (argc != 2) {
     //     printf("Usage: %s <image_file>\n", argv[0]);
@@ -97,7 +110,6 @@ int main(int argc, char **argv)
     // readImageFile(argv[1]);
     // printf("Input: %s\n", inputFile);
     // BMPResult res = readImageFile(inputFile);
-    generateHuffman(inputFile);
 
     // printf("%d\n", res.header->height);
     return EXIT_SUCCESS;
