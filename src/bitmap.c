@@ -57,11 +57,11 @@ void readImageFile(const char *filename) {
     printf("Important Colors: %u\n\n", infoHeader.importantColors);
 
     // Calculate row size with padding
-    int rowSize = ((infoHeader.bitsPerPixel * infoHeader.width + 31) / 32) * 4;
+    size_t rowSize = ((infoHeader.bitsPerPixel * infoHeader.width + 31) / 32) * 4;
     int padding = rowSize - (infoHeader.width * infoHeader.bitsPerPixel / 8);
 
     printf("=== PIXEL DATA INFO ===\n");
-    printf("Row Size (with padding): %d bytes\n", rowSize);
+    printf("Row Size (with padding): %ld bytes\n", rowSize);
     printf("Padding per row: %d bytes\n\n", padding);
 
     // Allocate memory for one row
@@ -84,7 +84,7 @@ void readImageFile(const char *filename) {
             break;
         }
         printf("Row %d: ", i);
-        for (int j = 0; j < rowSize; j++) {
+        for (size_t j = 0; j < rowSize; j++) {
             printf("%02X ", rowData[j]);
         }
         printf("\n");
