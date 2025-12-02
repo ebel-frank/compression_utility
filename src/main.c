@@ -57,47 +57,61 @@ int main(int argc, char **argv)
 
     bool helpFlag = false;
     bool versionFlag = false;
+    bool commandFlag = false;
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
-    bool decomp = false;
-    char *inputFile = NULL;
-    char *outputFile = NULL;
+    char *file = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &hasError, &wrap, &inputFile, &outputFile, &decomp);
+               &commandFlag, &hasError, &wrap, &file);
 
+    free(processed);
     // Handle flags
     if (hasError)
     {
         fprintf(stderr, "\n");
         printHelp();
-        free(processed);
         return EXIT_FAILURE;
     }
-    if (helpFlag)
+    if (!commandFlag && helpFlag)
     {
         printHelp();
-        free(processed);
         return EXIT_SUCCESS;
     }
-    if (versionFlag)
+    if (!commandFlag && verboseFlag)
     {
         printVersion();
-        free(processed);
         return EXIT_SUCCESS;
     }
-    if (wrap)
-    {
-        generateHuffman(inputFile);
-        free(processed);
-        return EXIT_SUCCESS;
+    if (commandFlag && helpFlag) {
+        if (wrap) {
+            printWrapHelp();
+        } else {
+            printUnwrapHelp();
+        }
+         return EXIT_SUCCESS;
     }
-    if (decomp)
+    if (!file)
     {
-        decompress(inputFile);
-        free(processed);
-        return EXIT_SUCCESS;
+
+        if (wrap)
+        {
+            printWrapHelp();
+        }
+        else
+        {
+            printUnwrapHelp();
+        }
+        return EXIT_FAILURE;
+    }
+      
+    if (wrap) {
+      generateHuffman(inputFile);
+      return EXIT_SUCCESS;
+    } else {
+      decompress(inputFile);
+      return EXIT_SUCCESS;
     }
 
     // if (argc != 2) {
@@ -108,9 +122,5 @@ int main(int argc, char **argv)
     // printf("Value of argv[0]: %s\n", argv[0]);
     // printf("Value of argv[1]: %s\n", argv[1]);
     // readImageFile(argv[1]);
-    // printf("Input: %s\n", inputFile);
-    // BMPResult res = readImageFile(inputFile);
-
-    // printf("%d\n", res.header->height);
     return EXIT_SUCCESS;
 }

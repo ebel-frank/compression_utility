@@ -3,8 +3,6 @@
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
                 bool *verboseFlag, bool *hasError, bool *wrap, char **inputFile, char **outputFile, bool *decomp)
 {
-    char *test = "test";
-    outputFile[0] = test;
     for (int i = 0; i < argc; i++)
     {
         if (processed[i])
@@ -17,7 +15,7 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
             *helpFlag = true;
             processed[i] = true;
         }
-        else if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0)
+        else if (!commandFlag && (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0))
         {
             *versionFlag = true;
             processed[i] = true;
@@ -30,36 +28,22 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         else if (strcmp(argv[i], "wrap") == 0)
         {
             *wrap = true;
-            *inputFile = argv[argc - 1];
-            printf("file name: %s \n", inputFile[0]);
-            processed[argc - 2] = true;
-            processed[argc - 1] = true;
+            *commandFlag = true;
+            processed[i] = true;
         }
-        else if (strcmp(argv[i], "decompress") == 0)
+        else if (strcmp(argv[i], "unwrap") == 0)
         {
-            printf("about to unwrap\n");
-
-            *decomp = true;
-            *inputFile = argv[argc - 1];
-            processed[argc - 2] = true;
-            processed[argc - 1] = true;
+          printf("about to unwrap\n");
+            *wrap = false;
+            *commandFlag = true;
+            processed[i] = true;
+        } else if (argv[i][0] != '-') {
+            *file = argv[i];
+            processed[i] = true;
         }
-        // else if (strcmp(argv[i], "--output") == 0 || strcmp(argv[i], "-o") == 0)
-        // {
-        //     if (i + 1 < argc) {
-        //         outputFile = argv[i + 1];
-        //         processed[i] = true;
-        //         processed[i + 1] = true;
-        //         i++; // Skip next argument
-        //     } else {
-        //         fprintf(stderr, "Error: -o requires a file argument\n");
-        //         *hasError = true;
-        //         processed[i] = true;
-        //     }
-        // }
     }
 
-    // Check for unprocessed arguments (unsupported options)
+   // Check for unprocessed arguments (unsupported options)
     for (int i = 1; i < argc; i++)
     {
         if (!processed[i])
