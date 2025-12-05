@@ -65,7 +65,7 @@ int main(int argc, char **argv)
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
                &commandFlag, &hasError, &wrap, &file);
 
-    printf("Help: %d, error: %d, version: %d, verbase: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
+    // printf("Help: %d, error: %d, version: %d, verbase: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
     // printf("Check: %d", )
     free(processed);
     // Handle flags
@@ -110,7 +110,6 @@ int main(int argc, char **argv)
         }
         return EXIT_FAILURE;
     }
-    printf("file: %s\n", file);
     execute(wrap, file);
 
     // if (argc != 2) {

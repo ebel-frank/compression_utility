@@ -1,5 +1,10 @@
 #ifndef HUFFMAN_H
 #define HUFFMAN_H
+
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h> // Added for strstr
 #include "../include/bitmap.h"
 
 // Defining Structures pixfreq
@@ -19,7 +24,7 @@ struct huffcode
 };
 
 
-void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd);
-void decompress(char *fileName, char *outputfile, int pipe_write_fd);
+int compress(char *fileName, char *outputfile, int pipe_write_fd);
+int decompress(char *fileName, int pipe_write_fd);
 
 #endif

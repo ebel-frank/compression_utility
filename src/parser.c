@@ -33,7 +33,6 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         }
         else if (strcmp(argv[i], "unwrap") == 0)
         {
-            printf("about to unwrap\n");
             *wrap = false;
             *commandFlag = true;
             processed[i] = true;
@@ -89,18 +88,16 @@ void execute(bool wrap, char *file)
 {
     // Get the output file path
     char *outputFile;
+    outputFile = NULL;
     if (wrap)
     {
         generateOutputFile(file, &outputFile);
+        if (outputFile == NULL)
+        {
+            exit(EXIT_FAILURE);
+        }
     }
-    else if (!wrap)
-    {
-        outputFile = "decompressed.bmp";
-    }
-    if (outputFile == NULL)
-    {
-        exit(EXIT_FAILURE);
-    }
+
     printf("Inputfile: %s\n", file);
     printf("Outputfile: %s\n", outputFile);
 
@@ -139,13 +136,15 @@ void execute(bool wrap, char *file)
         //     count += 10;
         // }
 
-        if (wrap)
+        if (wrap && compress(file, outputFile, pipe_fds[1]) != EXIT_FAILURE)
         {
-            generateHuffman(file, outputFile, pipe_fds[1]);
+            close(pipe_fds[1]);
+            exit(EXIT_FAILURE);
         }
-        else
+        else if (decompress(file, pipe_fds[1]) == EXIT_FAILURE)
         {
-            decompress(file, outputFile, pipe_fds[1]);
+            close(pipe_fds[1]);
+            exit(EXIT_FAILURE);
         }
 
         // clean up
@@ -159,7 +158,7 @@ void execute(bool wrap, char *file)
         close(pipe_fds[1]);
         int progress_percent = 0;
 
-        do
+        while (read(pipe_fds[0], &progress_percent, sizeof(progress_percent)) > 0)
         {
             if (wrap)
             {
@@ -170,7 +169,7 @@ void execute(bool wrap, char *file)
                 printf("\rDecompressing: %d%%", progress_percent);
             }
             fflush(stdout);
-        } while (read(pipe_fds[0], &progress_percent, sizeof(progress_percent)) > 0);
+        }
 
         printf("\n");
 
@@ -184,13 +183,13 @@ void execute(bool wrap, char *file)
         }
         else if (WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS)
         {
-            printf("Completed successfully.\n");
-            printf("\nTo get statistics; run 'gfwrap stats %s.gfw'.\n", outputFile);
+            printf("\nCompleted successfully.\n");
+            printf("\nTo get statistics; run 'gfwrap stats %s'.\n", outputFile);
         }
-        else
-        {
-            printf("Failed.\n");
-        }
+        // else
+        // {
+        //     printf("Failed.\n");
+        // }
     }
 
     free(outputFile);

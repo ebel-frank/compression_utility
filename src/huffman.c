@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h> // Added for strstr
 #include "../include/huffman.h"
 
 // --- BIT PACKING GLOBALS & HELPERS ---
@@ -93,56 +90,63 @@ int fib(int n)
 }
 
 // --- ENCODER ---
-
-void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
+int compress(char *fileName, char *outputfile, int pipe_write_fd)
 {
-    FILE *image_file = fopen(fileName, "rb");
-    if (!image_file)
+    int progress = 0;
+
+    // Open file as binary
+    FILE *input_file = fopen(fileName, "rb");
+    if (!input_file)
     {
-        printf("Error Opening Image File!\n");
-        return;
+        printf("Error Opening File!\n");
+        return EXIT_FAILURE;
     }
 
-    int width, height, offset, bpp;
+    // Get file size
+    fseek(input_file, 0, SEEK_END);
+    long file_size = ftell(input_file);
+    fseek(input_file, 0, SEEK_SET);
 
-    // Read BMP Metadata
-    fseek(image_file, 10, SEEK_SET);
-    fread(&offset, 4, 1, image_file);
-    fseek(image_file, 18, SEEK_SET);
-    fread(&width, 4, 1, image_file);
-    fread(&height, 4, 1, image_file);
-    fseek(image_file, 28, SEEK_SET);
-    fread(&bpp, 2, 1, image_file);
-
-    // Calculate Padding (BMP rows must be multiple of 4 bytes)
-    int padding = (4 - (width * 3) % 4) % 4;
-
-    // Allocate memory for the ENTIRE image
-    long total_bytes = width * height * 3;
-    unsigned char *img_data = (unsigned char *)malloc(total_bytes);
-
-    // Read Image Data
-    fseek(image_file, offset, SEEK_SET);
-
-    long count = 0;
-
-    // Read row by row (Bottom-Up)
-    for (int i = 0; i < height; i++)
+    if (file_size == 0)
     {
-        fread(&img_data[count], 1, width * 3, image_file);
-        count += width * 3;
-        fseek(image_file, padding, SEEK_CUR); // Skip padding in input
+        printf("Error: Empty file!\n");
+        fclose(input_file);
+        return EXIT_FAILURE;
     }
-    fclose(image_file);
+
+    progress = 5;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    // Read entire file into memory
+    unsigned char *file_data = (unsigned char *)malloc(file_size);
+    if (!file_data)
+    {
+        printf("Error: Memory allocation failed!\n");
+        fclose(input_file);
+        return EXIT_FAILURE;
+    }
+
+    size_t bytes_read = fread(file_data, 1, file_size, input_file);
+    fclose(input_file);
+
+    if (bytes_read != file_size)
+    {
+        printf("Error: Failed to read file completely!\n");
+        free(file_data);
+        return EXIT_FAILURE;
+    }
+
+    progress = 10;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
     // --- GENERATE HISTOGRAM ---
     int hist[256];
     for (int i = 0; i < 256; i++)
         hist[i] = 0;
 
-    for (long i = 0; i < total_bytes; i++)
+    for (long i = 0; i < file_size; i++)
     {
-        hist[img_data[i]] += 1;
+        hist[file_data[i]] += 1;
     }
 
     int nodes = 0;
@@ -150,11 +154,14 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
         if (hist[i] != 0)
             nodes++;
 
+    progress = 20;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
     // --- HUFFMAN TREE BUILDING ---
     float p = 1.0, ptemp;
     for (int i = 0; i < 256; i++)
     {
-        ptemp = (hist[i] / (float)total_bytes);
+        ptemp = (hist[i] / (float)file_size);
         if (ptemp > 0 && ptemp <= p)
             p = ptemp;
     }
@@ -175,7 +182,7 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
         {
             huffcodes[j].pix = i;
             huffcodes[j].arrloc = j;
-            huffcodes[j].freq = (float)hist[i] / (float)total_bytes;
+            huffcodes[j].freq = (float)hist[i] / (float)file_size;
             pix_freq[j].pix = i;
             pix_freq[j].freq = huffcodes[j].freq;
             pix_freq[j].left = NULL;
@@ -185,6 +192,9 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
             j++;
         }
     }
+
+    progress = 30;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
     // Sort
     struct huffcode temphuff;
@@ -200,6 +210,9 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
             }
         }
     }
+
+    progress = 40;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
     // Build Tree
     float sumprob;
@@ -233,6 +246,9 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
         nextnode++;
     }
 
+    progress = 50;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
     // Generate Codes
     for (int i = 2 * nodes - 2; i >= nodes; i--)
     {
@@ -242,29 +258,63 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
             strconcat(pix_freq[i].right->code, pix_freq[i].code, '1');
     }
 
+    progress = 60;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
     // Lookup Table
     char *codeTable[256] = {0};
     for (int i = 0; i < nodes; i++)
         codeTable[pix_freq[i].pix] = pix_freq[i].code;
 
-    // --- SAVE TO FILE ---
-    FILE *outfile = fopen(outputfile, "w");
-    fprintf(outfile, "%d %d\n%d\n", width, height, nodes); // Header
+    progress = 70;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    // --- SAVE TO BINARY FILE ---
+    FILE *outfile = fopen(outputfile, "wb");
+    if (!outfile)
+    {
+        printf("Error: Cannot create output file!\n");
+        free(file_data);
+        return EXIT_FAILURE;
+    }
+
+    // Write custom GFW header (binary format)
+    // Magic number "GFW" + version
+    fwrite("GFW", 1, 3, outfile);
+    unsigned char version = 1;
+    fwrite(&version, 1, 1, outfile);
+
+    // Write original file size
+    fwrite(&file_size, sizeof(long), 1, outfile);
+
+    // Write number of nodes
+    fwrite(&nodes, sizeof(int), 1, outfile);
+
+    // Write histogram (frequency table)
     for (int i = 0; i < 256; i++)
     {
         if (hist[i] != 0)
-            fprintf(outfile, "%d %d\n", i, hist[i]);
+        {
+            unsigned char byte_val = (unsigned char)i;
+            fwrite(&byte_val, 1, 1, outfile);
+            fwrite(&hist[i], sizeof(int), 1, outfile);
+        }
     }
-    fprintf(outfile, "\n--DATA--\n");
+
+    progress = 75;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
     // Reset globals
     buffer = 0;
     bit_count = 0;
 
     // Write Encoded Data using Bit Packing
-    for (long i = 0; i < total_bytes; i++)
+    long progress_interval = file_size / 20; // Update every 5% (20 updates from 75% to 95%)
+    if (progress_interval == 0) progress_interval = 1;
+
+    for (long i = 0; i < file_size; i++)
     {
-        char *code = codeTable[img_data[i]]; // Get the string "101" etc.
+        char *code = codeTable[file_data[i]]; // Get the string "101" etc.
 
         // Loop through the character string "101"
         for (int k = 0; code[k] != '\0'; k++)
@@ -274,48 +324,102 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
             else
                 writeBit(0, outfile);
         }
+
+        // Report progress during encoding (75-95%)
+        if (i % progress_interval == 0)
+        {
+            progress = 75 + (i * 20) / file_size;
+            write(pipe_write_fd, &progress, sizeof(progress));
+        }
     }
+
+    progress = 95;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
     // IMPORTANT: Write the last partial byte if exists
     flushBits(outfile);
 
     fclose(outfile);
-    free(img_data);
-    printf("Color Image Encoded Successfully (Binary Mode).\n");
+    free(file_data);
+
+    // Free allocated memory
+    for (int i = 0; i < 2 * nodes - 1; i++)
+    {
+        if (pix_freq[i].code)
+            free(pix_freq[i].code);
+    }
+    free(pix_freq);
+    free(huffcodes);
+
+    progress = 100;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    return EXIT_SUCCESS;
 }
 
 // --- DECODER ---
-
-void decompress(char *fileName, char *outputfile, int pipe_write_fd)
+int decompress(char *fileName, int pipe_write_fd)
 {
-    FILE *encoded_file = fopen(fileName, "r");
+    int progress = 0;
+    
+    FILE *encoded_file = fopen(fileName, "rb");
     if (!encoded_file)
     {
-        printf("File not found!\n");
-        return;
+        perror("gfwrap error: ");
+        return EXIT_FAILURE;
     }
 
-    int width, height, nodes;
-    fscanf(encoded_file, "%d %d", &width, &height);
-    fscanf(encoded_file, "%d", &nodes);
+    // Read and verify GFW header
+    char magic[4] = {0};
+    fread(magic, 1, 3, encoded_file);
+    
+    if (strncmp(magic, "GFW", 3) != 0)
+    {
+        perror("gfwrap error: Invalid input file format");
+        fclose(encoded_file);
+        return EXIT_FAILURE;
+    }
 
-    // --- REBUILD TREE ---
+    unsigned char version;
+    fread(&version, 1, 1, encoded_file);
+
+    progress = 5;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    // Read original file size
+    long file_size;
+    fread(&file_size, sizeof(long), 1, encoded_file);
+
+    // Read number of nodes
+    int nodes;
+    fread(&nodes, sizeof(int), 1, encoded_file);
+
+    progress = 10;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    // --- REBUILD HUFFMAN TREE ---
     struct huffcode *huffcodes = (struct huffcode *)malloc(sizeof(struct huffcode) * nodes);
     struct pixfreq *pix_freq = (struct pixfreq *)malloc(sizeof(struct pixfreq) * (2 * nodes - 1));
-    long total_bytes = width * height * 3;
-    int pix_val, freq_val;
-
+    
+    // Read frequency table
     for (int i = 0; i < nodes; i++)
     {
-        fscanf(encoded_file, "%d %d", &pix_val, &freq_val);
-        huffcodes[i].pix = pix_val;
-        huffcodes[i].freq = (float)freq_val / total_bytes;
+        unsigned char byte_val;
+        int freq_val;
+        fread(&byte_val, 1, 1, encoded_file);
+        fread(&freq_val, sizeof(int), 1, encoded_file);
+        
+        huffcodes[i].pix = byte_val;
+        huffcodes[i].freq = (float)freq_val / file_size;
         huffcodes[i].arrloc = i;
-        pix_freq[i].pix = pix_val;
+        pix_freq[i].pix = byte_val;
         pix_freq[i].freq = huffcodes[i].freq;
         pix_freq[i].left = NULL;
         pix_freq[i].right = NULL;
     }
+
+    progress = 20;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
     // Sort
     struct huffcode temphuff;
@@ -331,6 +435,10 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
             }
         }
     }
+
+    progress = 30;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
     // Build Tree
     float sumprob;
     int sumpix;
@@ -362,19 +470,12 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     }
     struct pixfreq *root = &pix_freq[nextnode - 1];
 
+    progress = 40;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
     // --- DECODE STREAM ---
-    char line_buffer[100];
-
-    // Read lines until we find the marker "--DATA--"
-    // This consumes the header text before switching to binary
-    while (fgets(line_buffer, 100, encoded_file))
-    {
-        if (strstr(line_buffer, "--DATA--"))
-            break;
-    }
-
-    // Allocate memory for the decoded RGB data
-    unsigned char *img_data = (unsigned char *)malloc(total_bytes);
+    // Allocate memory for the decoded data
+    unsigned char *file_data = (unsigned char *)malloc(file_size);
     long idx = 0;
 
     struct pixfreq *current = root;
@@ -384,8 +485,12 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     read_buffer = 0;
     read_bit_count = 8;
 
-    // Read bits using helper function (BINARY MODE)
-    while (idx < total_bytes)
+    // Calculate progress interval for decoding (40-80%)
+    long progress_interval = file_size / 20; // Update every 2%
+    if (progress_interval == 0) progress_interval = 1;
+
+    // Read bits and decode
+    while (idx < file_size)
     {
         bit = readBit(encoded_file);
 
@@ -396,41 +501,91 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
 
         if (!current->left && !current->right)
         {
-            img_data[idx++] = (unsigned char)current->pix;
+            file_data[idx++] = (unsigned char)current->pix;
             current = root;
+            
+            // Report progress during decoding (40-80%)
+            if (idx % progress_interval == 0)
+            {
+                progress = 40 + (idx * 40) / file_size;
+                write(pipe_write_fd, &progress, sizeof(progress));
+            }
         }
     }
     fclose(encoded_file);
 
-    // --- WRITE BMP FILE ---
-    FILE *out_file = fopen(outputfile, "wb");
+    progress = 80;
+    write(pipe_write_fd, &progress, sizeof(progress));
 
-    int padding = (4 - (width * 3) % 4) % 4;
-    int filesize = 54 + (3 * width + padding) * height;
-
-    unsigned char header[54] = {
-        'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0, 40, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
-
-    *(int *)&header[2] = filesize;
-    *(int *)&header[18] = width;
-    *(int *)&header[22] = height; // Positive height = Bottom-Up
-
-    fwrite(header, 1, 54, out_file);
-
-    unsigned char padBytes[3] = {0};
-    long row_size = width * 3;
-
-    for (int i = 0; i < height; i++)
+    // --- DETERMINE FILE TYPE FROM HEADER ---
+    char *extension = ".bin"; // Default extension
+    
+    // Check for common file signatures
+    if (file_size >= 2 && file_data[0] == 0xFF && file_data[1] == 0xD8)
     {
-        // Write the row
-        fwrite(&img_data[i * row_size], 1, row_size, out_file);
-        // Write padding
-        fwrite(padBytes, 1, padding, out_file);
+        extension = ".jpg"; // JPEG
+    }
+    else if (file_size >= 8 && file_data[0] == 0x89 && file_data[1] == 'P' && 
+             file_data[2] == 'N' && file_data[3] == 'G')
+    {
+        extension = ".png"; // PNG
+    }
+    else if (file_size >= 2 && file_data[0] == 'B' && file_data[1] == 'M')
+    {
+        extension = ".bmp"; // BMP
     }
 
+    progress = 85;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    // Create output filename
+    char output_filename[256];
+    // Find the last dot in the input file name to replace the extension (.gfw)
+    const char *dot = strrchr(fileName, '.');
+    size_t base_len = 0;
+
+    if (dot && dot != fileName) {
+        // Calculate the length of the base name including the path
+        base_len = dot - fileName;
+    } else {
+        // If no dot, use the full length of the filename as base
+        base_len = strlen(fileName);
+    }
+
+    // Ensure the base name fits in the buffer, leaving space for the extension and null terminator
+    if (base_len >= sizeof(output_filename) - 1) {
+        base_len = sizeof(output_filename) - 1;
+    }
+    
+    // Copy the base name (including path) safely
+    strncpy(output_filename, fileName, base_len);
+    output_filename[base_len] = '\0'; // Null-terminate the base
+    snprintf(output_filename + base_len, sizeof(output_filename) - base_len, "%s", extension);
+
+    // Write the decompressed file
+    FILE *out_file = fopen(output_filename, "wb");
+    if (!out_file)
+    {
+        // Cannot create output file
+        free(file_data);
+        free(pix_freq);
+        free(huffcodes);
+        return EXIT_FAILURE;
+    }
+
+    progress = 90;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    // Write all data at once
+    fwrite(file_data, 1, file_size, out_file);
+
     fclose(out_file);
-    free(img_data);
-    printf("Decompression Complete (Binary Mode).\n");
+    free(file_data);
+    free(pix_freq);
+    free(huffcodes);
+
+    progress = 100;
+    write(pipe_write_fd, &progress, sizeof(progress));
+
+    return EXIT_SUCCESS;
 }
