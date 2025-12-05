@@ -12,6 +12,10 @@ void printHelp()
     printf("  -v, --version       Show version information\n");
 }
 
+void printStatsHelp() {
+    printf("Usage: gfwrap stats <.gfw_file>\n\n");
+}
+
 void printWrapHelp() {
     printf("Usage: gfwrap wrap [OPTIONS] <input_file>\n\n");
     printf("Options:\n");

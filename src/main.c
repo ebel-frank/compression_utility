@@ -60,10 +60,11 @@ int main(int argc, char **argv)
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
+    bool stats = false;
     char *file = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &commandFlag, &hasError, &wrap, &file);
+               &commandFlag, &hasError, &wrap, &file, &stats);
 
     // printf("Help: %d, error: %d, version: %d, verbase: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
     // printf("Check: %d", )
@@ -87,7 +88,11 @@ int main(int argc, char **argv)
     }
     if (commandFlag && helpFlag)
     {
-        if (wrap)
+        if (stats)
+        {
+            printStatsHelp();
+        }
+        else if (wrap)
         {
             printWrapHelp();
         }
@@ -110,7 +115,7 @@ int main(int argc, char **argv)
         }
         return EXIT_FAILURE;
     }
-    execute(wrap, file);
+    execute(stats, wrap, file);
 
     // if (argc != 2) {
     //     printf("Usage: %s <image_file>\n", argv[0]);
