@@ -1,6 +1,61 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h> // Added for strstr
 #include "../include/huffman.h"
+
+// --- BIT PACKING GLOBALS & HELPERS ---
+
+unsigned char buffer = 0;
+int bit_count = 0;
+
+// Function to write a single bit to a file
+void writeBit(int bit, FILE *f)
+{
+    if (bit == 1)
+    {
+        buffer = buffer | (1 << (7 - bit_count)); // Set bit at position
+    }
+    // If bit is 0, we just skip it (buffer is init to 0)
+
+    bit_count++;
+    if (bit_count == 8)
+    {
+        fwrite(&buffer, 1, 1, f); // Buffer full, write to file
+        buffer = 0;
+        bit_count = 0;
+    }
+}
+
+// Function to flush remaining bits (ADDED)
+void flushBits(FILE *f)
+{
+    if (bit_count > 0)
+    {
+        fwrite(&buffer, 1, 1, f);
+        buffer = 0;
+        bit_count = 0;
+    }
+}
+
+// Global variables for Bit Reading (ADDED)
+unsigned char read_buffer = 0;
+int read_bit_count = 8; // Start at 8 to force a read on first call
+
+// Function to read a single bit from file (ADDED)
+int readBit(FILE *f)
+{
+    if (read_bit_count == 8)
+    {
+        fread(&read_buffer, 1, 1, f);
+        read_bit_count = 0;
+    }
+
+    int bit = (read_buffer >> (7 - read_bit_count)) & 1;
+    read_bit_count++;
+    return bit;
+}
+
+// --- STANDARD UTILS ---
 
 // Function to calculate word length
 int codelen(char *code)
@@ -37,6 +92,8 @@ int fib(int n)
     return fib(n - 1) + fib(n - 2);
 }
 
+// --- ENCODER ---
+
 void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
 {
     FILE *image_file = fopen(fileName, "rb");
@@ -60,21 +117,16 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
     // Calculate Padding (BMP rows must be multiple of 4 bytes)
     int padding = (4 - (width * 3) % 4) % 4;
 
-    // Allocate memory for the ENTIRE image (3 bytes per pixel)
-    // We treat the image as a long 1D array of bytes for easier processing
+    // Allocate memory for the ENTIRE image
     long total_bytes = width * height * 3;
     unsigned char *img_data = (unsigned char *)malloc(total_bytes);
 
     // Read Image Data
     fseek(image_file, offset, SEEK_SET);
 
-    // We assume the input BMP is stored Bottom-Up (Standard).
-    // We read it row by row to handle padding.
     long count = 0;
-    // unsigned char pad[3];
 
-    // Read row by row
-    // Note: We store it exactly as it comes (Bottom-Up)
+    // Read row by row (Bottom-Up)
     for (int i = 0; i < height; i++)
     {
         fread(&img_data[count], 1, width * 3, image_file);
@@ -83,12 +135,11 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
     }
     fclose(image_file);
 
-    // --- GENERATE HISTOGRAM (Color Aware) ---
+    // --- GENERATE HISTOGRAM ---
     int hist[256];
     for (int i = 0; i < 256; i++)
         hist[i] = 0;
 
-    // Count every single byte (R, G, and B separately)
     for (long i = 0; i < total_bytes; i++)
     {
         hist[img_data[i]] += 1;
@@ -99,10 +150,7 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
         if (hist[i] != 0)
             nodes++;
 
-    // --- STANDARD HUFFMAN TREE BUILDING (Same as before) ---
-    // (This logic remains identical, it just processes more data now)
-
-    // ... [Calculations for maxcodelen] ...
+    // --- HUFFMAN TREE BUILDING ---
     float p = 1.0, ptemp;
     for (int i = 0; i < 256; i++)
     {
@@ -194,13 +242,13 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
             strconcat(pix_freq[i].right->code, pix_freq[i].code, '1');
     }
 
-    // Lookup Table for Speed
+    // Lookup Table
     char *codeTable[256] = {0};
     for (int i = 0; i < nodes; i++)
         codeTable[pix_freq[i].pix] = pix_freq[i].code;
 
     // --- SAVE TO FILE ---
-    FILE *outfile = fopen("encoded_image.txt", "w");
+    FILE *outfile = fopen(outputfile, "w");
     fprintf(outfile, "%d %d\n%d\n", width, height, nodes); // Header
     for (int i = 0; i < 256; i++)
     {
@@ -209,16 +257,34 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
     }
     fprintf(outfile, "\n--DATA--\n");
 
-    // Write Encoded Data (Color!)
+    // Reset globals
+    buffer = 0;
+    bit_count = 0;
+
+    // Write Encoded Data using Bit Packing
     for (long i = 0; i < total_bytes; i++)
     {
-        fprintf(outfile, "%s", codeTable[img_data[i]]);
+        char *code = codeTable[img_data[i]]; // Get the string "101" etc.
+
+        // Loop through the character string "101"
+        for (int k = 0; code[k] != '\0'; k++)
+        {
+            if (code[k] == '1')
+                writeBit(1, outfile);
+            else
+                writeBit(0, outfile);
+        }
     }
+
+    // IMPORTANT: Write the last partial byte if exists
+    flushBits(outfile);
 
     fclose(outfile);
     free(img_data);
-    printf("Color Image Encoded Successfully.\n");
+    printf("Color Image Encoded Successfully (Binary Mode).\n");
 }
+
+// --- DECODER ---
 
 void decompress(char *fileName, char *outputfile, int pipe_write_fd)
 {
@@ -233,11 +299,10 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     fscanf(encoded_file, "%d %d", &width, &height);
     fscanf(encoded_file, "%d", &nodes);
 
-    // --- REBUILD TREE (Standard) ---
-    // (Variable declarations and tree building logic same as before)
+    // --- REBUILD TREE ---
     struct huffcode *huffcodes = (struct huffcode *)malloc(sizeof(struct huffcode) * nodes);
     struct pixfreq *pix_freq = (struct pixfreq *)malloc(sizeof(struct pixfreq) * (2 * nodes - 1));
-    long total_bytes = width * height * 3; // Note: Multiplied by 3 for RGB
+    long total_bytes = width * height * 3;
     int pix_val, freq_val;
 
     for (int i = 0; i < nodes; i++)
@@ -266,7 +331,7 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
             }
         }
     }
-    // Build
+    // Build Tree
     float sumprob;
     int sumpix;
     int n = 0, k = 0, nextnode = nodes;
@@ -298,11 +363,13 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     struct pixfreq *root = &pix_freq[nextnode - 1];
 
     // --- DECODE STREAM ---
-    char buffer[100];
-    fgets(buffer, 100, encoded_file);
-    while (fgets(buffer, 100, encoded_file))
+    char line_buffer[100];
+
+    // Read lines until we find the marker "--DATA--"
+    // This consumes the header text before switching to binary
+    while (fgets(line_buffer, 100, encoded_file))
     {
-        if (buffer[0] == '-')
+        if (strstr(line_buffer, "--DATA--"))
             break;
     }
 
@@ -311,20 +378,20 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     long idx = 0;
 
     struct pixfreq *current = root;
-    char bit;
+    int bit;
 
-    // Read bits and traverse tree
+    // Reset binary reader globals
+    read_buffer = 0;
+    read_bit_count = 8;
+
+    // Read bits using helper function (BINARY MODE)
     while (idx < total_bytes)
     {
-        bit = fgetc(encoded_file);
-        if (bit == EOF)
-            break;
-        if (bit == '\n' || bit == '\r')
-            continue;
+        bit = readBit(encoded_file);
 
-        if (bit == '0')
+        if (bit == 0)
             current = current->left;
-        else if (bit == '1')
+        else
             current = current->right;
 
         if (!current->left && !current->right)
@@ -335,8 +402,8 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     }
     fclose(encoded_file);
 
-    // --- WRITE BMP FILE (Orientation Fix) ---
-    FILE *out_file = fopen("restored_image.bmp", "wb");
+    // --- WRITE BMP FILE ---
+    FILE *out_file = fopen(outputfile, "wb");
 
     int padding = (4 - (width * 3) % 4) % 4;
     int filesize = 54 + (3 * width + padding) * height;
@@ -348,17 +415,13 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
 
     *(int *)&header[2] = filesize;
     *(int *)&header[18] = width;
-    *(int *)&header[22] = height; // POSITIVE height = Bottom-Up storage
+    *(int *)&header[22] = height; // Positive height = Bottom-Up
 
     fwrite(header, 1, 54, out_file);
 
     unsigned char padBytes[3] = {0};
-
-    // Note: The encoder read the file Bottom-Up (standard BMP).
-    // So 'img_data' contains the bottom row at index 0.
-    // Therefore, we just write it out linearly to maintain the Bottom-Up format.
-
     long row_size = width * 3;
+
     for (int i = 0; i < height; i++)
     {
         // Write the row
@@ -369,5 +432,5 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
 
     fclose(out_file);
     free(img_data);
-    printf("Decompression Complete. Orientation corrected.\n");
+    printf("Decompression Complete (Binary Mode).\n");
 }

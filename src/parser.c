@@ -89,7 +89,14 @@ void execute(bool wrap, char *file)
 {
     // Get the output file path
     char *outputFile;
-    generateOutputFile(file, &outputFile);
+    if (wrap)
+    {
+        generateOutputFile(file, &outputFile);
+    }
+    else if (!wrap)
+    {
+        outputFile = "decompressed.bmp";
+    }
     if (outputFile == NULL)
     {
         exit(EXIT_FAILURE);
