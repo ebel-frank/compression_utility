@@ -9,3 +9,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Compile code
+        run: make build
+
+      - name: Run test cases
+        run: make test
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: gfwrap-binary
+          path: bin/gfwrap
