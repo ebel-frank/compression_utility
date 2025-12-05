@@ -3,7 +3,14 @@
 #include <string.h>
 #include <time.h>     // Added for clock()
 #include <sys/stat.h> // Added for file size
+// #include <math.h>
 #include "../include/huffman.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "../libraries/stb_image.h" // or "../include/stb_image.h"
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "../libraries/stb_image_write.h" // or "../include/stb_image_write.h"
 
 // --- STATS HELPERS ---
 
@@ -122,6 +129,14 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
 {
     clock_t start_time = clock(); // Start Timer
 
+    // Get Original Size for stats
+    long original_size = get_file_size(fileName);
+
+    int width, height, channels;
+    unsigned char *img_data = NULL;
+
+    // --- OLD MANUAL READING (COMMENTED OUT) ---
+    /*
     FILE *image_file = fopen(fileName, "rb");
     if (!image_file)
     {
@@ -129,10 +144,7 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
         return;
     }
 
-    // Get Original Size for stats
-    long original_size = get_file_size(fileName);
-
-    int width, height, offset, bpp;
+    int offset, bpp;
 
     // Read BMP Metadata
     fseek(image_file, 10, SEEK_SET);
@@ -148,7 +160,7 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
 
     // Allocate memory for the ENTIRE image
     long total_bytes = width * height * 3;
-    unsigned char *img_data = (unsigned char *)malloc(total_bytes);
+    img_data = (unsigned char *)malloc(total_bytes);
 
     // Read Image Data
     fseek(image_file, offset, SEEK_SET);
@@ -163,6 +175,20 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
         fseek(image_file, padding, SEEK_CUR); // Skip padding in input
     }
     fclose(image_file);
+    */
+    // ------------------------------------------
+
+    // --- NEW LIBRARY READING (STB_IMAGE) ---
+    // Force 3 channels (RGB) to match Huffman logic
+    img_data = stbi_load(fileName, &width, &height, &channels, 3);
+    if (!img_data)
+    {
+        printf("Error loading image %s\n", fileName);
+        return;
+    }
+    // ---------------------------------------
+
+    long total_bytes = width * height * 3;
 
     // --- GENERATE HISTOGRAM ---
     int hist[256];
@@ -316,7 +342,7 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
     flushBits(outfile);
 
     fclose(outfile);
-    free(img_data);
+    stbi_image_free(img_data); // Free memory from stbi_load
     printf("Compression Complete: Saved to %s\n", outputfile);
 }
 
@@ -442,7 +468,8 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     }
     fclose(encoded_file);
 
-    // --- WRITE BMP FILE ---
+    // --- OLD MANUAL WRITING (COMMENTED OUT) ---
+    /*
     FILE *out_file = fopen(outputfile, "wb");
 
     int padding = (4 - (width * 3) % 4) % 4;
@@ -471,6 +498,22 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     }
 
     fclose(out_file);
+    */
+    // ------------------------------------------
+
+    // --- NEW LIBRARY WRITING (STB_IMAGE_WRITE) ---
+    if (strstr(outputfile, ".png") || strstr(outputfile, ".PNG"))
+    {
+        // Write as PNG
+        stbi_write_png(outputfile, width, height, 3, img_data, width * 3);
+    }
+    else
+    {
+        // Default to BMP
+        stbi_write_bmp(outputfile, width, height, 3, img_data);
+    }
+    // ---------------------------------------------
+
     free(img_data);
     printf("Decompression Complete: Saved to %s\n", outputfile);
 }

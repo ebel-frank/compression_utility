@@ -21,7 +21,7 @@
 CC := cc
 #CFLAGS := -std=c11 -Wall -Wextra -Werror -Wpedantic -D_POSIX_C_SOURCE=200809L
 CFLAGS := -std=c11 -Wall -Wextra -D_POSIX_C_SOURCE=200809L
-LDFLAGS :=
+LDFLAGS := -lm
 
 # Directories
 SRC_DIR := src
