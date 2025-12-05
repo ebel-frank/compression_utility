@@ -1,7 +1,31 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h> // Added for strstr
+#include <string.h>
+#include <time.h>     // Added for clock()
+#include <sys/stat.h> // Added for file size
 #include "../include/huffman.h"
+
+// --- STATS HELPERS ---
+
+// // Helper: Convert bytes to human readable string
+// void format_size(long bytes, char *buffer)
+// {
+//     if (bytes >= 1024 * 1024)
+//         sprintf(buffer, "%.2f MB", bytes / (1024.0 * 1024.0));
+//     else if (bytes >= 1024)
+//         sprintf(buffer, "%.2f KB", bytes / 1024.0);
+//     else
+//         sprintf(buffer, "%ld B", bytes);
+// }
+
+// // Helper: Get file size
+// long get_file_size(const char *filename)
+// {
+//     struct stat st;
+//     if (stat(filename, &st) == 0)
+//         return st.st_size;
+//     return -1;
+// }
 
 // --- BIT PACKING GLOBALS & HELPERS ---
 
@@ -26,7 +50,7 @@ void writeBit(int bit, FILE *f)
     }
 }
 
-// Function to flush remaining bits (ADDED)
+// Function to flush remaining bits
 void flushBits(FILE *f)
 {
     if (bit_count > 0)
@@ -37,11 +61,11 @@ void flushBits(FILE *f)
     }
 }
 
-// Global variables for Bit Reading (ADDED)
+// Global variables for Bit Reading
 unsigned char read_buffer = 0;
 int read_bit_count = 8; // Start at 8 to force a read on first call
 
-// Function to read a single bit from file (ADDED)
+// Function to read a single bit from file
 int readBit(FILE *f)
 {
     if (read_bit_count == 8)
@@ -61,7 +85,7 @@ int readBit(FILE *f)
 int codelen(char *code)
 {
     int l = 0;
-    while (*(code + l) != '\0') // '\0' is the null terminator
+    while (*(code + l) != '\0')
         l++;
     return l;
 }
@@ -75,7 +99,7 @@ void strconcat(char *str, char *parentcode, char add)
         *(str + i) = *(parentcode + i);
         i++;
     }
-    if (add != '2') // If add is not '2', append the character and null terminator
+    if (add != '2')
     {
         str[i] = add;
         str[i + 1] = '\0';
@@ -96,12 +120,17 @@ int fib(int n)
 
 void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
 {
+    clock_t start_time = clock(); // Start Timer
+
     FILE *image_file = fopen(fileName, "rb");
     if (!image_file)
     {
         printf("Error Opening Image File!\n");
         return;
     }
+
+    // Get Original Size for stats
+    long original_size = get_file_size(fileName);
 
     int width, height, offset, bpp;
 
@@ -247,9 +276,17 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
     for (int i = 0; i < nodes; i++)
         codeTable[pix_freq[i].pix] = pix_freq[i].code;
 
-    // --- SAVE TO FILE ---
+    // --- STOP TIMER & SAVE TO FILE ---
+
     FILE *outfile = fopen(outputfile, "w");
-    fprintf(outfile, "%d %d\n%d\n", width, height, nodes); // Header
+
+    clock_t end_time = clock();
+    double time_taken = ((double)(end_time - start_time)) / CLOCKS_PER_SEC;
+
+    // Header Format: OriginalSize TimeTaken Width Height
+    fprintf(outfile, "%ld %f %d %d\n", original_size, time_taken, width, height);
+    fprintf(outfile, "%d\n", nodes); // Write nodes on next line
+
     for (int i = 0; i < 256; i++)
     {
         if (hist[i] != 0)
@@ -264,9 +301,8 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
     // Write Encoded Data using Bit Packing
     for (long i = 0; i < total_bytes; i++)
     {
-        char *code = codeTable[img_data[i]]; // Get the string "101" etc.
+        char *code = codeTable[img_data[i]];
 
-        // Loop through the character string "101"
         for (int k = 0; code[k] != '\0'; k++)
         {
             if (code[k] == '1')
@@ -281,7 +317,7 @@ void generateHuffman(char *fileName, char *outputfile, int pipe_write_fd)
 
     fclose(outfile);
     free(img_data);
-    printf("Color Image Encoded Successfully (Binary Mode).\n");
+    printf("Compression Complete: Saved to %s\n", outputfile);
 }
 
 // --- DECODER ---
@@ -296,7 +332,12 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     }
 
     int width, height, nodes;
-    fscanf(encoded_file, "%d %d", &width, &height);
+    long original_size;
+    double time_taken;
+
+    // --- READ UPDATED HEADER ---
+    // We scan original_size and time_taken, but ignore them for decompression logic
+    fscanf(encoded_file, "%ld %f %d %d", &original_size, &time_taken, &width, &height);
     fscanf(encoded_file, "%d", &nodes);
 
     // --- REBUILD TREE ---
@@ -366,7 +407,6 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
     char line_buffer[100];
 
     // Read lines until we find the marker "--DATA--"
-    // This consumes the header text before switching to binary
     while (fgets(line_buffer, 100, encoded_file))
     {
         if (strstr(line_buffer, "--DATA--"))
@@ -432,5 +472,5 @@ void decompress(char *fileName, char *outputfile, int pipe_write_fd)
 
     fclose(out_file);
     free(img_data);
-    printf("Decompression Complete (Binary Mode).\n");
+    printf("Decompression Complete: Saved to %s\n", outputfile);
 }

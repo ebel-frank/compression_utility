@@ -37,6 +37,7 @@
 #include "../include/bitmap.h"
 #include "../include/parser.h"
 #include "../include/util.h"
+#include "../include/util.h"
 
 /*
  * main - Entry point for the compression tool
@@ -60,10 +61,11 @@ int main(int argc, char **argv)
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
+    bool statsFlag = false;
     char *file = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &commandFlag, &hasError, &wrap, &file);
+               &commandFlag, &hasError, &wrap, &file, &statsFlag);
 
     printf("Help: %d, error: %d, version: %d, verbase: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
     // printf("Check: %d", )
@@ -78,6 +80,11 @@ int main(int argc, char **argv)
     if (!commandFlag && helpFlag)
     {
         printHelp();
+        return EXIT_SUCCESS;
+    }
+    if (!commandFlag && statsFlag)
+    {
+        printStats(file);
         return EXIT_SUCCESS;
     }
     if (!commandFlag && versionFlag)
@@ -110,7 +117,7 @@ int main(int argc, char **argv)
         }
         return EXIT_FAILURE;
     }
-    printf("file: %s\n", file);
+    // printf("file: %s\n", file);
     execute(wrap, file);
 
     // if (argc != 2) {

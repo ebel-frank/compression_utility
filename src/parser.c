@@ -1,7 +1,7 @@
 #include "../include/parser.h"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file)
+                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file, bool *stats)
 {
     for (int i = 0; i < argc; i++)
     {
@@ -36,6 +36,14 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
             printf("about to unwrap\n");
             *wrap = false;
             *commandFlag = true;
+            processed[i] = true;
+        }
+        else if (strcmp(argv[i], "stats") == 0)
+        {
+            printf("getting stats\n");
+            *stats = true;
+            *wrap = false;
+            *commandFlag = false;
             processed[i] = true;
         }
         else if (argv[i][0] != '-')
@@ -193,5 +201,8 @@ void execute(bool wrap, char *file)
         }
     }
 
-    free(outputFile);
+    if (wrap)
+    {
+        free(outputFile);
+    }
 }
