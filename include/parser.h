@@ -12,7 +12,7 @@
 #define GFW_EXTENSION ".gfw"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file, bool *stats);
+                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file);
 
 void execute(bool stats, bool wrap, char *file);
 

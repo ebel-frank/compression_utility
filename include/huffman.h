@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
+#include <time.h>
 #include <string.h> // Added for strstr
 #include "../include/bitmap.h"
 

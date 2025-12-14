@@ -60,17 +60,16 @@ int main(int argc, char **argv)
     bool hasError = false;
     bool verboseFlag = false;
     bool wrap = false;
-    bool stats = false;
     char *file = NULL;
 
     parseInput(argc, argv, processed, &helpFlag, &versionFlag, &verboseFlag,
-               &commandFlag, &hasError, &wrap, &file, &stats);
+               &commandFlag, &hasError, &wrap, &file);
 
-    // printf("Help: %d, error: %d, version: %d, verbase: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
+    printf("Help: %d, error: %d, version: %d, verbose: %d, command: %d \n", helpFlag, hasError, versionFlag, verboseFlag, commandFlag);
     // printf("Check: %d", )
     free(processed);
     // Handle flags
-    if (hasError)
+    if (hasError || (!helpFlag && !versionFlag && !verboseFlag && !commandFlag))
     {
         fprintf(stderr, "\n");
         printHelp();
@@ -86,13 +85,14 @@ int main(int argc, char **argv)
         printVersion();
         return EXIT_SUCCESS;
     }
+    if (!commandFlag && verboseFlag)
+    {
+        printHelp();
+        return EXIT_FAILURE;
+    }
     if (commandFlag && helpFlag)
     {
-        if (stats)
-        {
-            printStatsHelp();
-        }
-        else if (wrap)
+        if (wrap)
         {
             printWrapHelp();
         }
@@ -102,9 +102,8 @@ int main(int argc, char **argv)
         }
         return EXIT_SUCCESS;
     }
-    if (!file)
+    if (commandFlag && !file)
     {
-
         if (wrap)
         {
             printWrapHelp();
@@ -115,15 +114,7 @@ int main(int argc, char **argv)
         }
         return EXIT_FAILURE;
     }
-    execute(stats, wrap, file);
+    execute(verboseFlag, wrap, file);
 
-    // if (argc != 2) {
-    //     printf("Usage: %s <image_file>\n", argv[0]);
-    //     return EXIT_FAILURE;
-    // }
-    // printf("Value of argc: %d\n", argc);
-    // printf("Value of argv[0]: %s\n", argv[0]);
-    // printf("Value of argv[1]: %s\n", argv[1]);
-    // readImageFile(argv[1]);
     return EXIT_SUCCESS;
 }

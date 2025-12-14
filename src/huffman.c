@@ -1,4 +1,5 @@
 #include "../include/huffman.h"
+#include <time.h>
 
 // --- BIT PACKING GLOBALS & HELPERS ---
 

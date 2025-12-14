@@ -1,7 +1,7 @@
 #include "../include/parser.h"
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file, bool *stats)
+                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file)
 {
     for (int i = 0; i < argc; i++)
     {
@@ -33,13 +33,6 @@ void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *ve
         }
         else if (strcmp(argv[i], "unwrap") == 0)
         {
-            *wrap = false;
-            *commandFlag = true;
-            processed[i] = true;
-        }
-        else if (strcmp(argv[i], "stats") == 0)
-        {
-            *stats = true;
             *wrap = false;
             *commandFlag = true;
             processed[i] = true;
@@ -111,58 +104,8 @@ long get_file_size(const char *filename)
     return -1;
 }
 
-void printStats(char *fileName)
+void execute(bool verbose, bool wrap, char *file)
 {
-    FILE *file = fopen(fileName, "r");
-    if (!file)
-    {
-        printf("Error: Could not open file %s\n", fileName);
-        return;
-    }
-
-    long original_size_bytes;
-    double time_taken;
-    int width, height;
-
-    // 1. Read the Header to get stored stats
-    if (fscanf(file, "%ld %lf %d %d", &original_size_bytes, &time_taken, &width, &height) != 4)
-    {
-        printf("Error: Invalid file format.\n");
-        fclose(file);
-        return;
-    }
-    fclose(file);
-
-    // 2. Get Compressed Size (Actual size of the .gfw file)
-    long compressed_size_bytes = get_file_size(fileName);
-
-    // 3. Calculate Ratio
-    // Ratio = (1 - (compressed / original)) * 100
-    float ratio = 100.0 * (1.0 - ((float)compressed_size_bytes / (float)original_size_bytes));
-    if (ratio < 0)
-        ratio = 0; // handle edge case if compressed is larger
-
-    // 4. Format Output
-    char orig_str[20], comp_str[20];
-    format_size(original_size_bytes, orig_str);
-    format_size(compressed_size_bytes, comp_str);
-
-    printf("Compression Ratio: %.0f%%\n", ratio);
-    printf("Original Size:     %s\n", orig_str);
-    printf("Compressed Size:   %s\n", comp_str);
-    printf("Time Elapsed:      %.2fs\n", time_taken);
-}
-
-void execute(bool stats, bool wrap, char *file)
-{
-
-    if (stats)
-    {
-        printf("Starting");
-        printStats(file);
-        exit(EXIT_SUCCESS);
-    }
-
     // Get the output file path
     char *outputFile;
     outputFile = NULL;
@@ -176,7 +119,8 @@ void execute(bool stats, bool wrap, char *file)
     }
 
     printf("Inputfile: %s\n", file);
-    printf("Outputfile: %s\n", outputFile);
+
+    clock_t start_time = clock();
 
     // Create the pipes
     int pipe_fds[2];
@@ -201,22 +145,13 @@ void execute(bool stats, bool wrap, char *file)
         // Child don't need to read from pipe
         close(pipe_fds[0]);
 
-        // int count = 0;
-        // while (true)
-        // {
-        //     sleep(2);
-        //     write(pipe_fds[1], &count, sizeof(count));
-        //     if (count == 100)
-        //     {
-        //         break;
-        //     }
-        //     count += 10;
-        // }
-
-        if (wrap && compress(file, outputFile, pipe_fds[1]) != EXIT_FAILURE)
+        if (wrap)
         {
-            close(pipe_fds[1]);
-            exit(EXIT_FAILURE);
+            if (compress(file, outputFile, pipe_fds[1]) == EXIT_FAILURE)
+            {
+                close(pipe_fds[1]);
+                exit(EXIT_FAILURE);
+            }
         }
         else if (decompress(file, pipe_fds[1]) == EXIT_FAILURE)
         {
@@ -261,12 +196,30 @@ void execute(bool stats, bool wrap, char *file)
         else if (WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS)
         {
             printf("\nCompleted successfully.\n");
-            printf("\nTo get statistics; run 'gfwrap stats %s'.\n", outputFile);
+
+            // if (wrap)
+            // {
+            //     printf("\nTo get statistics; run 'gfwrap stats %s'.\n", outputFile);
+            // }
+
+            if (verbose)
+            {
+                clock_t end_time = clock();
+                double time_taken_final = (double)(end_time - start_time) / CLOCKS_PER_SEC * 1000;
+                long compressed_size = get_file_size(outputFile);
+                long input_size = get_file_size(file);
+
+                float compression_ratio = (compressed_size > 0) ? (1.0 - (float)compressed_size / (float)input_size) * 100.0 : 0.0;
+
+                // Save statistics
+                printf("\n========== Compression Statistics ==========\n");
+                printf("Original Size:     %ld bytes\n", input_size);
+                printf("Compressed Size:   %ld bytes\n", compressed_size);
+                printf("Compression Ratio: %.2f%%\n", compression_ratio);
+                printf("Time Taken:        %.2f milliseconds\n", time_taken_final);
+                printf("==========================================\n");
+            }
         }
-        // else
-        // {
-        //     printf("Failed.\n");
-        // }
     }
 
     free(outputFile);
