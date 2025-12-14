@@ -115,6 +115,5 @@ int main(int argc, char **argv)
         return EXIT_FAILURE;
     }
     execute(verboseFlag, wrap, file);
-
     return EXIT_SUCCESS;
 }

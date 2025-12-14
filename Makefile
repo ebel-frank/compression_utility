@@ -56,3 +56,9 @@ all: release
 .PHONY: release
 release: CFLAGS += -O2
 release: $(TARGET)
+
+.PHONY: test
+test: $(TARGET)
+	@echo "Running test harness..."
+	@mkdir -p $(TEST_DIR)/tmp
+	@bash $(TEST_DIR)/run_all.sh
