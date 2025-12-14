@@ -17,7 +17,7 @@ jobs:
         run: make test
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: gfwrap-binary
           path: bin/gfwrap
