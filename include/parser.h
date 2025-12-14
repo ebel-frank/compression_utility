@@ -14,12 +14,10 @@
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
                 bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file);
 
-void execute(bool stats, bool wrap, char *file);
+void execute(bool verbose, bool wrap, char *file);
 
 void format_size(long bytes, char *buffer);
 
 long get_file_size(const char *filename);
-
-void printStats(char *fileName);
 
 #endif

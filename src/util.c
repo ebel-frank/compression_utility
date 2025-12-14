@@ -16,13 +16,13 @@ void printHelp()
 void printWrapHelp() {
     printf("Usage: gfwrap wrap [OPTIONS] <input_file>\n\n");
     printf("Options:\n");
-    printf("  -V, --verbose           verbose mode\n");
+    printf("  -V, --verbose       verbose mode\n");
 }
 
 void printUnwrapHelp() {
     printf("Usage: gfwrap unwrap [OPTIONS] <input_file>\n\n");
     printf("Options:\n");
-    printf("  -V, --verbose           verbose mode\n");
+    printf("  -V, --verbose       verbose mode\n");
 }
 
 void printVersion()

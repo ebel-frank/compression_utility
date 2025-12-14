@@ -150,17 +150,23 @@ void execute(bool verbose, bool wrap, char *file)
             if (compress(file, outputFile, pipe_fds[1]) == EXIT_FAILURE)
             {
                 close(pipe_fds[1]);
+                if (outputFile)
+                    free(outputFile);
                 exit(EXIT_FAILURE);
             }
         }
         else if (decompress(file, pipe_fds[1]) == EXIT_FAILURE)
         {
             close(pipe_fds[1]);
+            if (outputFile)
+                free(outputFile);
             exit(EXIT_FAILURE);
         }
 
         // clean up
         close(pipe_fds[1]);
+        if (outputFile)
+            free(outputFile);
         exit(EXIT_SUCCESS);
     }
     // Parent proces
@@ -196,11 +202,6 @@ void execute(bool verbose, bool wrap, char *file)
         else if (WIFEXITED(status) && WEXITSTATUS(status) == EXIT_SUCCESS)
         {
             printf("\nCompleted successfully.\n");
-
-            // if (wrap)
-            // {
-            //     printf("\nTo get statistics; run 'gfwrap stats %s'.\n", outputFile);
-            // }
 
             if (verbose)
             {

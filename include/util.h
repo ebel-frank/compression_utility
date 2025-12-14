@@ -5,8 +5,6 @@
 
 void printHelp();
 
-void printStatsHelp();
-
 void printWrapHelp();
 
 void printUnwrapHelp();
