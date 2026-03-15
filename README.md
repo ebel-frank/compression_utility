@@ -1,3 +1,5 @@
+<img src="gfwrap.png" height="200" />
+
 # Compression Utility - gfwrap
 
 A lightweight, efficient image compression utility for Linux systems similar to gzip. This tool provides fast compression and decompression capabilities. It is able to take an image file and compress it using Huffman coding. It can also decompress the image back to its original. One of the features is to generate statistics.
