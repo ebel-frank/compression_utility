@@ -5,6 +5,6 @@
 #include <string.h>
 
 void parseInput(int argc, char **argv, bool *processed, bool *helpFlag, bool *versionFlag,
-                bool *verboseFlag, bool *hasError, bool *wrap, char **file);
+                bool *verboseFlag, bool *commandFlag, bool *hasError, bool *wrap, char **file);
 
 #endif
